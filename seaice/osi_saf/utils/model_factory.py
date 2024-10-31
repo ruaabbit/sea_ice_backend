@@ -1,9 +1,8 @@
-from distutils.command.config import config
-
 import torch.nn as nn
-from utils.tools import unfold_stack_over_channel, fold_tensor
-from models.SICFN import SICFN
-from config import configs
+
+from ..config import configs
+from ..models.SICFN import SICFN
+from ..utils.tools import unfold_stack_over_channel, fold_tensor
 
 
 class IceNet(nn.Module):

@@ -1,13 +1,14 @@
 import argparse
 import time
+
 import numpy as np
 import torch
 from torch.utils.data import DataLoader
 
-from utils.tools import setup_logging
+from config import configs
 from dataset.dataset import SIC_dataset
 from train import Trainer
-from config import configs
+from utils.tools import setup_logging
 
 
 def create_parser():

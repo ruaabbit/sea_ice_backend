@@ -4,7 +4,7 @@
  # @Date: 2024-06-25 16:06:28
  # @LastEditors: 爱吃菠萝 1690608011@qq.com
  # @LastEditTime: 2024-09-27 15:32:47
- # @FilePath: /root/OSI-SAF/test.sh
+ # @FilePath: /root/osi_saf/test.sh
  # @Description: 
  # 
  # Copyright (c) 2024 by ${git_name_email}, All Rights Reserved. 

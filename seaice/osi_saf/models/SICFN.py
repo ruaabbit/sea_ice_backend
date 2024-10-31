@@ -1,8 +1,10 @@
 from functools import partial
+
 import torch
 from torch import nn
-from layers.SICFN.TABlock import Block
-from layers.SICFN.AFNO import AFNOBlock, PatchEmbed
+
+from ..layers.SICFN.AFNO import AFNOBlock, PatchEmbed
+from ..layers.SICFN.TABlock import Block
 
 
 class BasicConv2d(nn.Module):

@@ -1,7 +1,12 @@
 import hashlib
+import io
+import json
+import time
 import uuid
 from pathlib import Path
 
+import numpy as np
+from PIL import Image
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from django.http import HttpResponse, JsonResponse
@@ -9,43 +14,63 @@ from datetime import datetime, timedelta
 from django.views.decorators.http import require_GET, require_POST
 
 from sea_ice_backend import settings
-
-
-def hello_world(request):
-    return HttpResponse("Hello World!")
-
-
-def hello_world_json(request):
-    return JsonResponse({'hello': 'world'})
+from seaice.osi_saf import predict
 
 
 # 日预测视图
-@require_GET
+@require_POST
 def day_prediction(request):
-    # 获取前端传递的startDate参数
-    start_date_str = request.GET.get('startDate')
+    days = 14
     try:
+        data = json.loads(request.body).get('data')
+        start_date_str = data.get('start_date')
         start_date = datetime.strptime(start_date_str, '%Y/%m/%d')
-    except (ValueError, TypeError):
-        return JsonResponse({'error': 'Invalid start date'}, status=400)
+        image_paths = data.get('image_paths', [])
 
-    days = 7
-    images = []
+        if len(image_paths) != 14:
+            return JsonResponse({'error': 'Please provide exactly 14 image paths'}, status=400)
 
-    start_date_fake = datetime.strptime('2019/09/15', '%Y/%m/%d')
+        # Open images from local paths
+        images = []
+        for path_str in image_paths:
+            path = Path(path_str)
+            if path.exists():
+                img = Image.open(path)
+                images.append(img)
+            else:
+                return JsonResponse({'error': f'File not found: {path_str}'}, status=400)
 
-    # 生成7天的图片路径和日期信息
-    for i in range(days):
-        current_date = start_date + timedelta(days=i)
-        current_date_fake = start_date_fake + timedelta(days=i)
-        # 假设图片路径以日期为名，并存储在某个路径下
-        path = f"picture/arctic-sea-ice/{current_date_fake.year}0915-{current_date_fake.year}0928/{current_date_fake.strftime('%Y%m%d')}.png"
-        images.append({
-            'path': path,
-            'date': current_date.strftime('%Y-%m-%d')
-        })
+        # Generate predictions
+        predictions = predict.predict_ice_concentration(images)
 
-    return JsonResponse({'data': images})
+        # Save predictions as images and generate URLs
+        urls = []
+        for i, prediction in enumerate(predictions):
+            pred_image = Image.fromarray(np.array((prediction[0] * 255)).astype(np.uint8))
+            buffer = io.BytesIO()
+            pred_image.save(buffer, format='PNG')
+            image_hash = hashlib.sha256(buffer.read()).hexdigest()
+            file_name = Path('predicts') / f'{image_hash}.png'
+            if not default_storage.exists(str(file_name)):
+                file_name = default_storage.save(file_name, ContentFile(buffer.getvalue()))
+            file_url = default_storage.url(file_name)
+            urls.append(file_url)
+
+        # 生成14天的图片路径和日期信息
+        data = []
+        for i in range(days):
+            current_date = start_date + timedelta(days=i)
+            # 假设图片路径以日期为名，并存储在某个路径下
+            data.append({
+                'path': 'https://seaice.52lxy.one:20443' + urls[i],
+                'date': current_date.strftime('%Y-%m-%d')
+            })
+
+        return JsonResponse({'data': data})
+
+    except Exception as e:
+        print(e)
+        return JsonResponse({'error': str(e)}, status=500)
 
 
 # 月预测视图

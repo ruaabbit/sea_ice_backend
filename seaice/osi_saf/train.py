@@ -1,20 +1,19 @@
-import os
-import time
-import numpy as np
 import math
-from tqdm import tqdm
-import torch
+import time
+
+import numpy as np
 import torch.nn as nn
-from torch.utils.data import DataLoader
-from torch.optim.lr_scheduler import OneCycleLR
-from torch.optim import AdamW
 from torch.amp import autocast, GradScaler
+from torch.optim import AdamW
+from torch.optim.lr_scheduler import OneCycleLR
+from torch.utils.data import DataLoader
+from tqdm import tqdm
 
 from config import configs
 from dataset.dataset import SIC_dataset
+from utils.metrics import *
 from utils.model_factory import IceNet
 from utils.tools import setup_logging
-from utils.metrics import *
 
 dataset_train = SIC_dataset(
     configs.data_paths,

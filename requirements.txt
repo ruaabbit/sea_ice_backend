@@ -1,8 +1,0 @@
-django~=5.0.0
-django-cors-headers
-django-simpleui
-redis
-eventlet
-celery
-django-celery-beat
-django-celery-results
