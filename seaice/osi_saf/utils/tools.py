@@ -3,11 +3,14 @@ import logging
 
 import dask
 import dask.array as da
+import matplotlib.pyplot as plt
 import numpy as np
 import torch.nn.functional as F
 import xarray as xr
+from PIL import Image
 from dask.diagnostics import ProgressBar
 from dateutil.relativedelta import relativedelta
+from netCDF4 import Dataset
 
 
 def setup_logging(log_file):
@@ -246,3 +249,107 @@ def prepare_input_target_indices(
     target_indices = indices[::sample_gap, input_length:]
     assert len(input_indices) == len(target_indices)
     return input_indices, target_indices
+
+
+def nc_to_png(nc_file_path, png_file_path, variable_name='ice_conc'):
+    """
+    将 nc 文件中的数据读取并保存为精确 432x432 像素的 PNG 图片。
+
+    参数：
+    - nc_file_path: str，nc 文件的路径。
+    - png_file_path: str，保存 PNG 图片的路径。
+    - variable_name: str，nc 文件中表示海冰数据的变量名。
+    """
+    # 打开 nc 文件
+    with Dataset(nc_file_path, 'r') as nc_file:
+        # 读取变量数据
+        print(nc_file.variables)
+        if variable_name in nc_file.variables:
+            sea_ice_data = nc_file.variables[variable_name][:]
+        else:
+            raise KeyError(f"变量 '{variable_name}' 不存在于 nc 文件中。")
+
+    # 检查数据的形状是否符合要求
+    if sea_ice_data.shape[-2:] != (432, 432):
+        raise ValueError("数据的空间分辨率不是 432x432，请检查文件内容。")
+
+    # 进行数据预处理
+    sea_ice_data = np.squeeze(sea_ice_data)  # 去掉单通道维度
+    sea_ice_data = np.where(sea_ice_data == -32767, 0, sea_ice_data)
+
+
+    sea_ice_data = sea_ice_data / 100
+
+    # 创建图像并设置精确的DPI
+    dpi = 72  # 标准显示DPI
+    figsize = (432 / dpi, 432 / dpi)  # 根据目标像素和DPI计算图像尺寸
+
+    # 创建图像
+    fig = plt.figure(figsize=figsize, dpi=dpi)
+    ax = plt.Axes(fig, [0., 0., 1., 1.])  # 创建填充整个图像的轴
+    ax.set_axis_off()
+    fig.add_axes(ax)
+
+    # 显示图像
+    ax.imshow(sea_ice_data, cmap='plasma', vmin=0, vmax=1)
+
+    # 保存为精确尺寸的PNG
+    plt.savefig(png_file_path,
+                dpi=dpi,
+                format='png',
+                bbox_inches=None,
+                pad_inches=0)
+    plt.close()
+
+    # 验证保存的图片尺寸
+    from PIL import Image
+    with Image.open(png_file_path) as img:
+        print(f"保存的图片尺寸为: {img.size}")
+
+    print(f"图片已成功保存到 {png_file_path}")
+
+
+def png_to_nc(png_file_path, nc_file_path, variable_name='ice_conc'):
+    """
+    将 PNG 图片中的数据读取并保存为 .nc 文件。
+
+    参数：
+    - png_file_path: str，PNG 图片的路径。
+    - nc_file_path: str，保存的 .nc 文件的路径。
+    - variable_name: str，.nc 文件中表示海冰数据的变量名。
+    """
+    # 打开 PNG 图片并转换为灰度模式（如果需要）
+    image = Image.open(png_file_path).convert('L')
+    image_data = np.array(image).astype(np.float32) / 255.0  # 将数据归一化到 [0, 1] 范围
+
+    # 恢复到原始比例（假设 PNG 中的数据是通过将数值乘以100得到的）
+    image_data = image_data * 100.0
+
+    # 创建一个新的 nc 文件
+    with Dataset(nc_file_path, 'w', format='NETCDF4') as nc_file:
+        # 创建维度
+        nc_file.createDimension('x', 432)
+        nc_file.createDimension('y', 432)
+
+        # 创建变量
+        sea_ice_var = nc_file.createVariable(variable_name, 'f4', ('x', 'y'))
+
+        # 将数据写入变量
+        sea_ice_var[:] = image_data
+
+        # 添加简单的描述
+        sea_ice_var.units = "percentage"
+        sea_ice_var.long_name = "Sea Ice Concentration"
+
+    print(f"数据已成功保存到 {nc_file_path}")
+
+
+if __name__ == '__main__':
+    pub_path = 'media/downloads/'
+    # for i in range(1, 20):
+    #     nc_path = f'2020/01/ice_conc_nh_ease2-250_cdr-v3p0_202001{str(i).zfill(2)}1200.nc'
+    #     png_path = 'png/' + nc_path.replace('.nc', '.png')
+    #     nc_to_png(pub_path + nc_path, pub_path + png_path)
+    nc_path = r'2020/01/asi-AMSR2-n3125-20241105-v5.4.nc'
+    png_path = 'png/' + nc_path.replace('.nc', '.png')
+    nc_to_png(pub_path + nc_path, pub_path + png_path)

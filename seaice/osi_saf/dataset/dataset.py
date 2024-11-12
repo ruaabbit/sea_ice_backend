@@ -15,11 +15,7 @@ import numpy as np
 import xarray as xr
 from torch.utils.data import Dataset
 
-from ..utils.tools import (
-    generate_date_list,
-    prepare_input_target_indices,
-    process_sea_ice_data,
-)
+from ..utils.tools import generate_date_list, prepare_input_target_indices, process_sea_ice_data
 
 
 class SIC_dataset(Dataset):

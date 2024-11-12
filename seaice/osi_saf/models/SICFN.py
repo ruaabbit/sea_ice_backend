@@ -386,9 +386,7 @@ class SICFN(nn.Module):
             dropcls=dropcls,
         )
 
-        self.criterion = nn.HuberLoss()
-
-    def forward(self, input_x, targets):
+    def forward(self, input_x):
         assert len(input_x.shape) == 5
 
         B, T, C, H, W = input_x.shape
@@ -408,6 +406,4 @@ class SICFN(nn.Module):
         pred = TA_out + AFNO_out
         pred = torch.clamp(pred, 0, 1)
 
-        loss = self.criterion(pred, targets)
-
-        return pred, loss
+        return pred

@@ -70,9 +70,9 @@ class Configs:
         self.fno_softshrink = 0.05
 
         # paths
-        self.data_paths = "data/data_path.txt"
-        self.train_log_path = "train_logs"
-        self.test_results_path = "test_results"
+        self.data_paths = "seaice/osi_saf/data/data_path.txt"
+        self.train_log_path = "seaice/osi_saf/train_logs"
+        self.test_results_path = "seaice/osi_saf/test_results"
 
 
 configs = Configs()

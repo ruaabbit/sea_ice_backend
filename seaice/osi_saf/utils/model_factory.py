@@ -32,24 +32,21 @@ class IceNet(nn.Module):
         else:
             raise ValueError("错误的网络名称，不存在%s这个网络" % configs.model)
 
-    def forward(self, inputs, targets):
+    def forward(self, inputs):
         B, T, C, H, W = inputs.shape
         padding = abs(H - W) // 2  # 两侧填充的数量
         if configs.model in ["SICFN", ]:
             if H > W:
                 # 指定在 W 轴方向左侧和右侧各填充多少个零
                 inputs = nn.functional.pad(inputs, (padding, padding, 0, 0), value=0)
-                targets = nn.functional.pad(targets, (padding, padding, 0, 0), value=0)
             elif H < W:
                 # 指定在 H 轴方向上侧和下侧各填充多少个零
                 inputs = nn.functional.pad(inputs, (0, 0, padding, padding), value=0)
-                targets = nn.functional.pad(targets, (0, 0, padding, padding), value=0)
 
-        pred, loss = self.net(
+        pred = self.net(
             unfold_stack_over_channel(inputs, configs.patch_size),
-            unfold_stack_over_channel(targets, configs.patch_size),
         )
 
         pred = fold_tensor(pred, configs.img_size, configs.patch_size)
 
-        return pred, loss
+        return pred
