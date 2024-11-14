@@ -6,6 +6,8 @@ import torch
 from PIL import Image
 from netCDF4 import Dataset
 
+from .model_factory import IceNet
+
 
 class CustomUnpickler(pickle.Unpickler):
     def find_class(self, module, name):
@@ -17,8 +19,6 @@ class CustomUnpickler(pickle.Unpickler):
 # 从 pkl 文件加载 configs
 with open("seaice/osi_450_a/pkls/train_config_SICTeDev_update.pkl", "rb") as f:
     configs = CustomUnpickler(f).load()
-
-from .model_factory import IceNet
 
 model_path: str = "seaice/osi_450_a/checkpoints/checkpoint_SICTeDev_update.chk"
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -121,5 +121,5 @@ def _predict(input_array: np.ndarray, input_times: List[int]) -> np.ndarray:
 
     # 转换为 numpy 数组
     prediction = output.cpu().numpy()[0]
-
+    torch.cuda.empty_cache()
     return prediction

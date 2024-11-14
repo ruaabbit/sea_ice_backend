@@ -91,7 +91,7 @@ def generate_tasks(start_date, end_date, output_directory, task_type='DAILY'):
             else:
                 base_url = BASE_URL_POST_2021
             for suffix in ['icdrft', 'icdr', 'cdr']:
-                filename = f"ice_conc_nh_ease2-250_{suffix}-v3p0_{file_date}.nc"
+                filename = f"ice_conc_nh_ease2-250_{suffix}-v3p0_{file_date}1200.nc"
                 file_url = f"{base_url}/{current_date.year}/{current_date.month:02d}/{filename}"
                 output_file = output_directory / filename
                 tasks.append((file_url, output_file))

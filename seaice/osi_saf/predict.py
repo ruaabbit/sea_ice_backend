@@ -108,5 +108,5 @@ def _predict(input_array: np.ndarray) -> np.ndarray:
 
     # 转换为 numpy 数组
     prediction = output.cpu().numpy()[0]
-
+    torch.cuda.empty_cache()
     return prediction

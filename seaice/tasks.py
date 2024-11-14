@@ -2,13 +2,15 @@ import asyncio
 import datetime
 import io
 import random
+import sys
 from pathlib import Path
 
 import numpy as np
-from PIL import Image
 from celery import shared_task
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
+from matplotlib import pyplot as plt
+from matplotlib.colors import ListedColormap
 
 from sea_ice_backend import settings
 from seaice.models import DownloadPredictTask
@@ -27,9 +29,7 @@ def _download_predict_and_save(start_date_str, end_date_str, task_type):
 
     # 调用下载并组织数据的函数
     nc_files = asyncio.run(download_and_organize_data(start_date, end_date, output_directory, task_type))
-    # 保存所有预测结果的URL
-    result_urls = []
-
+    print(nc_files)
     # 调用预测函数
     if task_type == 'DAILY':
         predictions = predict.predict_ice_concentration_from_nc_files(nc_files)
@@ -59,12 +59,18 @@ def _download_predict_and_save(start_date_str, end_date_str, task_type):
         random_num = random.randint(1000, 9999)
         file_name = f"predict_task_{timestamp}_{random_num}.png"
 
-        # 转换预测结果为图片
-        pred_image = Image.fromarray(
-            np.array((prediction[0] * 255)).astype(np.uint8)
-        )
+        Land = ListedColormap(["#777777"])
+        Land = np.repeat(np.array(Land(0))[None], 12, axis=0)
+        blues = plt.get_cmap("Blues", 120)(np.linspace(0, 1, 120))[::-1]
+        cmap = np.vstack((Land, blues))
+        cmap = ListedColormap(cmap)
+
+        # 转换预测结果为图片并应用colormap
+        plt.imshow(prediction[0], cmap=cmap)
+        plt.axis('off')  # 关闭坐标轴
         buffer = io.BytesIO()
-        pred_image.save(buffer, format="PNG")
+        plt.savefig(buffer, format='png', bbox_inches='tight', pad_inches=0)
+        buffer.seek(0)
 
         # 保存文件
         file_path = Path("predicts") / file_name
@@ -103,6 +109,7 @@ def download_predict_and_save(task_type='DAILY'):
         start_date=start_date,
         end_date=end_date,
         task_type=task_type,
+        source='SCHEDULED',
         status='IN_PROGRESS'
     )
 
@@ -114,7 +121,7 @@ def download_predict_and_save(task_type='DAILY'):
         task.status = 'COMPLETED'
     except Exception as e:
         task.status = 'FAILED'
-        print(f"Error during task execution: {e}")
+        print(f"Error during task execution: {e}", file=sys.stderr)
     finally:
         task.save()
 
@@ -127,8 +134,8 @@ if __name__ == "__main__":
     end_date_str = end_date.strftime("%Y%m%d")
 
     # 开始日期是结束日期的12个月之前
-    start_date = end_date - datetime.timedelta(days=365)
+    start_date = end_date - datetime.timedelta(days=14)
     start_date_str = start_date.strftime("%Y%m%d")
-    input_files, result_urls = _download_predict_and_save(start_date_str, end_date_str, 'MONTHLY')
+    input_files, result_urls = _download_predict_and_save(start_date_str, end_date_str, 'DAILY')
     print(input_files)
     print(result_urls)

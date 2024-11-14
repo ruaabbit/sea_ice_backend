@@ -12,9 +12,12 @@ from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
-from django.views.decorators.http import require_POST
+from django.views.decorators.http import require_POST, require_GET
+from matplotlib import pyplot as plt
+from matplotlib.colors import ListedColormap
 
 from sea_ice_backend import settings
+from seaice.models import DownloadPredictTask
 from seaice.osi_450_a import predict as predict_month
 from seaice.osi_saf import predict as predict_day
 
@@ -46,6 +49,15 @@ def day_prediction(request):
                     {"error": f"Failed to open image {path_str}: {str(e)}"}, status=400
                 )
 
+        # 创建数据库任务记录
+        task = DownloadPredictTask.objects.create(
+            start_date=start_date,
+            end_date=start_date + timedelta(days=days - 1),
+            task_type='DAILY',
+            source='API',
+            status='IN_PROGRESS'
+        )
+
         # Generate predictions
         predictions = predict_day.predict_ice_concentration_from_images(images)
 
@@ -57,12 +69,18 @@ def day_prediction(request):
             random_num = random.randint(1000, 9999)
             file_name = f"predict_{timestamp}_{random_num}.png"
 
-            # 转换预测结果为图片
-            pred_image = Image.fromarray(
-                np.array((prediction[0] * 255)).astype(np.uint8)
-            )
+            Land = ListedColormap(["#777777"])
+            Land = np.repeat(np.array(Land(0))[None], 12, axis=0)
+            blues = plt.get_cmap("Blues", 120)(np.linspace(0, 1, 120))[::-1]
+            cmap = np.vstack((Land, blues))
+            cmap = ListedColormap(cmap)
+
+            # 转换预测结果为图片并应用colormap
+            plt.imshow(prediction[0], cmap=cmap)
+            plt.axis('off')  # 关闭坐标轴
             buffer = io.BytesIO()
-            pred_image.save(buffer, format="PNG")
+            plt.savefig(buffer, format='png', bbox_inches='tight', pad_inches=0)
+            buffer.seek(0)
 
             # 保存文件
             file_path = Path("predicts") / file_name
@@ -73,7 +91,9 @@ def day_prediction(request):
             file_url = default_storage.url(file_path)
             urls.append(file_url)
             buffer.close()
-
+        task.result_urls = urls
+        task.status = 'COMPLETED'
+        task.save()
         # 生成14天的图片路径和日期信息
         data = []
         for i in range(days):
@@ -85,7 +105,6 @@ def day_prediction(request):
                     "date": current_date.strftime("%Y-%m-%d"),
                 }
             )
-
         return JsonResponse({"data": data})
 
     except Exception as e:
@@ -106,7 +125,7 @@ def month_prediction(request):
 
     if len(image_paths) != 12:
         return JsonResponse(
-            {"error": "Please provide exactly 6 image path for monthly prediction"},
+            {"error": "Please provide exactly 12 image path for monthly prediction"},
             status=400,
         )
 
@@ -135,6 +154,15 @@ def month_prediction(request):
                 {"error": f"Failed to open image {path_str}: {str(e)}"}, status=400
             )
 
+    # 创建数据库任务记录
+    task = DownloadPredictTask.objects.create(
+        start_date=start_date,
+        end_date=start_date + timedelta(days=365),
+        task_type='DAILY',
+        source='API',
+        status='IN_PROGRESS'
+    )
+
     # Generate predictions for the next 12 months
     predictions = predict_month.predict_ice_concentration_from_images(
         images, input_times
@@ -148,12 +176,18 @@ def month_prediction(request):
         random_num = random.randint(1000, 9999)
         file_name = f"predict_{timestamp}_{random_num}.png"
 
-        # Convert prediction to image
-        pred_image = Image.fromarray(
-            np.array((prediction[0] * 255)).astype(np.uint8)
-        )
+        Land = ListedColormap(["#777777"])
+        Land = np.repeat(np.array(Land(0))[None], 12, axis=0)
+        blues = plt.get_cmap("Blues", 120)(np.linspace(0, 1, 120))[::-1]
+        cmap = np.vstack((Land, blues))
+        cmap = ListedColormap(cmap)
+
+        # 转换预测结果为图片并应用colormap
+        plt.imshow(prediction[0], cmap=cmap)
+        plt.axis('off')  # 关闭坐标轴
         buffer = io.BytesIO()
-        pred_image.save(buffer, format="PNG")
+        plt.savefig(buffer, format='png', bbox_inches='tight', pad_inches=0)
+        buffer.seek(0)
 
         # Save the file
         file_path = Path("predicts") / file_name
@@ -164,7 +198,9 @@ def month_prediction(request):
         file_url = default_storage.url(file_path)
         urls.append(file_url)
         buffer.close()
-
+    task.result_urls = urls
+    task.status = 'COMPLETED'
+    task.save()
     # Generate 12 months of image paths and dates
     data = []
     for i in range(months):
@@ -172,7 +208,7 @@ def month_prediction(request):
         data.append(
             {
                 "path": settings.HOST_PREFIX + urls[i],
-                "date": current_date.strftime("%Y-%m-%d"),
+                "date": current_date.strftime("%Y-%m"),
             }
         )
 
@@ -181,6 +217,50 @@ def month_prediction(request):
     # except Exception as e:
     #     print(e)
     #     return JsonResponse({"error": str(e)}, status=500)
+
+
+@require_GET
+def realtime_day_prediction(request):
+    try:
+        task = DownloadPredictTask.objects.filter(task_type='DAILY', status='COMPLETED', source='SCHEDULED').order_by(
+            '-created_at').first()
+        if not task:
+            return JsonResponse({"error": "No completed daily prediction task found"}, status=404)
+
+        data = []
+        start_date = task.start_date
+        for i, url in enumerate(task.result_urls):
+            current_date = start_date + timedelta(days=i)
+            data.append({
+                "path": settings.HOST_PREFIX + url,
+                "date": current_date.strftime("%Y-%m-%d"),
+            })
+
+        return JsonResponse({"data": data})
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
+
+
+@require_GET
+def realtime_month_prediction(request):
+    try:
+        task = DownloadPredictTask.objects.filter(task_type='MONTHLY', status='COMPLETED', source='SCHEDULED').order_by(
+            '-created_at').first()
+        if not task:
+            return JsonResponse({"error": "No completed monthly prediction task found"}, status=404)
+
+        data = []
+        start_date = task.start_date
+        for i, url in enumerate(task.result_urls):
+            current_date = start_date + relativedelta.relativedelta(months=i + 12)
+            data.append({
+                "path": settings.HOST_PREFIX + url,
+                "date": current_date.strftime("%Y-%m"),
+            })
+
+        return JsonResponse({"data": data})
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
 
 
 @require_POST
