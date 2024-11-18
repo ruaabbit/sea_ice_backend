@@ -2,8 +2,8 @@ from typing import List
 
 import numpy as np
 import torch
+import xarray as xr
 from PIL import Image
-from netCDF4 import Dataset
 
 from .utils.model_factory import IceNet
 
@@ -40,29 +40,6 @@ def predict_ice_concentration_from_images(
     return _predict(input_array)
 
 
-def predict_ice_concentration_from_nc_file(
-        nc_file_path: str, variable_name: str = "ice_conc"
-) -> np.ndarray:
-    """
-    从 .nc 文件预测未来的海冰浓度。
-
-    参数：
-        nc_file_path: .nc 文件的路径
-        variable_name: 要读取的变量名称，默认为 'sea_ice_concentration'
-
-    返回：
-        np.ndarray: 预测的海冰浓度图，形状为 (14, H, W)
-    """
-    # 读取 nc 文件
-    dataset = Dataset(nc_file_path)
-    data = dataset.variables[variable_name][:]  # 根据实际数据结构调整索引
-    dataset.close()
-    # 针对 nc 文件的数据预处理，除以100
-    input_array = data.astype(np.float32)
-    input_array = input_array / 100.0
-    return _predict(input_array)
-
-
 def predict_ice_concentration_from_nc_files(
         nc_file_paths: List[str], variable_name: str = "ice_conc"
 ) -> np.ndarray:
@@ -74,16 +51,16 @@ def predict_ice_concentration_from_nc_files(
         variable_name: 要读取的变量名称，默认为 'sea_ice_concentration'
 
     返回：
-        np.ndarray: 预测的海冰浓度图，形状为 (12, H, W)
+        np.ndarray: 预测的海冰浓度图，形状为 (14, H, W)
     """
     nc_data = []
     # 读取 nc 文件
     for nc_file_path in nc_file_paths:
-        dataset = Dataset(nc_file_path)
-        data = dataset.variables[variable_name][:][0]  # 根据实际数据结构调整索引
-        dataset.close()
-        # 针对 nc 文件的数据预处理，除以100
-        input_array = data.astype(np.float32)
+        with xr.open_dataset(nc_file_path) as xr_data:
+            data = xr_data["ice_conc"][0]
+        input_array = np.array(data)
+        np.nan_to_num(input_array, nan=0, copy=False)
+        input_array = np.where(input_array == -32767, 0, input_array)
         input_array = input_array / 100.0
         nc_data.append(input_array)
     return _predict(np.array(nc_data))

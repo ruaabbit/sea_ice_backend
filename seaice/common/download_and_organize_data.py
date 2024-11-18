@@ -1,7 +1,8 @@
 import asyncio
 import re
 import shutil
-from datetime import datetime, timedelta
+from collections import defaultdict
+from datetime import datetime
 from pathlib import Path
 
 import aiohttp
@@ -11,15 +12,22 @@ from dateutil import relativedelta
 BASE_URL_PRE_2021 = "https://thredds.met.no/thredds/fileServer/osisaf/met.no/reprocessed/ice/conc_450a_files"
 BASE_URL_POST_2021 = "https://thredds.met.no/thredds/fileServer/osisaf/met.no/reprocessed/ice/conc_cra_files"
 BASE_URL_MONTHLY = "https://thredds.met.no/thredds/fileServer/osisaf/met.no/reprocessed/ice/conc_cra_files/monthly"
+
+PRIORITY = {"cdr": 1, "icdr": 2, "icdrft": 3}
+
 FILENAME_PATTERN_DAILY = (
-    r"^ice_conc_nh_ease2-250_(cdr-v3p0|icdr-v3p0|icdrft-v3p0)_(\d{4})(\d{2})\d{2}1200\.nc$"
+    r"^ice_conc_nh_ease2-250_(cdr|icdr|icdrft)-v3p0_(\d{4})(\d{2})\d{2}1200\.nc$"
 )
 FILENAME_PATTERN_MONTHLY = (
-    r"^ice_conc_nh_ease2-250_(cdr-v3p0|icdr-v3p0|icdrft-v3p0)_(\d{4})(\d{2})\.nc$"
+    r"^ice_conc_nh_ease2-250_(cdr|icdr|icdrft)-v3p0_(\d{4})(\d{2})\.nc$"
+)
+
+FILENAME_PATTERN_ALL = (
+    r"^ice_conc_nh_ease2-250_(cdr|icdr|icdrft)-v3p0_(\d{4}\d{2}(?:\d{6})?)\.nc$"
 )
 
 
-async def download_file(session, file_url, output_file, retries=3, delay=5):
+async def download_file(session, file_url, output_file, retries=3, delay=3):
     """
     异步下载文件，支持重试机制。
     """
@@ -27,7 +35,7 @@ async def download_file(session, file_url, output_file, retries=3, delay=5):
         print(f"文件已存在，跳过下载: {output_file}")
         return True
 
-    for attempt in range(1, retries + 1):
+    for attempt in range(retries):
         try:
             async with session.get(file_url) as response:
                 if response.status != 200:
@@ -36,12 +44,14 @@ async def download_file(session, file_url, output_file, retries=3, delay=5):
                 output_file.parent.mkdir(parents=True, exist_ok=True)
                 with output_file.open("wb") as f:
                     f.write(data)
-                print(f"下载成功: {output_file}")
+                # print(f"下载成功: {output_file}")
                 return True
+        except aiohttp.ClientError as e:
+            return False
         except Exception as e:
-            print(f"第 {attempt} 次尝试下载失败 {file_url}: {e}")
+            # print(f"第 {attempt} 次尝试下载失败 {file_url}: {e}")
             await asyncio.sleep(delay)
-    print(f"下载失败: {file_url} 在 {retries} 次尝试后")
+    # print(f"下载失败: {file_url} 在 {retries} 次尝试后")
     return False
 
 
@@ -90,19 +100,16 @@ def generate_tasks(start_date, end_date, output_directory, task_type='DAILY'):
                 base_url = BASE_URL_PRE_2021
             else:
                 base_url = BASE_URL_POST_2021
-            for suffix in ['icdrft', 'icdr', 'cdr']:
+            for suffix in ['cdr', 'icdr', 'icdrft', ]:
                 filename = f"ice_conc_nh_ease2-250_{suffix}-v3p0_{file_date}1200.nc"
                 file_url = f"{base_url}/{current_date.year}/{current_date.month:02d}/{filename}"
                 output_file = output_directory / filename
                 tasks.append((file_url, output_file))
-            current_date += timedelta(days=1)
+            current_date += relativedelta.relativedelta(days=1)
     else:
-        current_date = current_date.replace(day=1)
-        end_date = end_date.replace(day=1)
         while current_date <= end_date:
             file_date = current_date.strftime("%Y%m")
-
-            for suffix in ['icdrft', 'icdr', 'cdr']:
+            for suffix in ['cdr', 'icdr', 'icdrft', ]:
                 filename = f"ice_conc_nh_ease2-250_{suffix}-v3p0_{file_date}.nc"
                 file_url = f"{BASE_URL_MONTHLY}/{current_date.year}/{filename}"
                 output_file = output_directory / filename
@@ -118,7 +125,8 @@ async def download_and_organize_data(start_date, end_date, output_directory, tas
     异步下载并组织数据文件。
     """
     output_directory = Path(output_directory)
-    output_directory.mkdir(parents=True, exist_ok=True)
+    if not output_directory.exists():
+        output_directory.mkdir(parents=True)
     tasks = generate_tasks(start_date, end_date, output_directory, task_type)
 
     connector = aiohttp.TCPConnector(limit=max_connections)
@@ -130,14 +138,31 @@ async def download_and_organize_data(start_date, end_date, output_directory, tas
             for file_url, output_file in tasks
         ]
         results = await asyncio.gather(*download_tasks)
-        for (file_url, output_file), success in zip(tasks, results):
-            if success:
-                try:
-                    organized_file = organize_file(output_file, output_directory)
-                    downloaded_files.append(organized_file)
+        list_download_success = [str(output_file) for (file_url, output_file), success in zip(tasks, results) if
+                                 success]
 
-                except Exception as e:
-                    print(f"组织文件时出错 {output_file}: {e}")
+        # 分组并按优先级保留最高的文件
+        deduplicated_files_dict = defaultdict(lambda: ('', float("inf")))  # (file_path, priority)
+        for file_path in list_download_success:
+            match = re.search(FILENAME_PATTERN_ALL, file_path.split("/")[-1])
+            if match:
+                group1, group2 = match.groups()
+                priority = PRIORITY[group1]
+                # 如果当前文件优先级更高，则替换
+                if priority < deduplicated_files_dict[group2][1]:
+                    deduplicated_files_dict[group2] = (file_path, priority)
+
+        # 提取最终结果
+        deduplicated_files = [file for file, _ in deduplicated_files_dict.values()]
+
+        for output_file in deduplicated_files:
+            try:
+                # 只处理非重复的文件或被选中的重复文件
+                organized_file = organize_file(output_file, output_directory)
+                downloaded_files.append(organized_file)
+
+            except Exception as e:
+                print(f"组织文件时出错 {output_file}: {e}")
     return downloaded_files
 
 

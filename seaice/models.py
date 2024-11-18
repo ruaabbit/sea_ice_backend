@@ -15,6 +15,7 @@ class DownloadPredictTask(models.Model):
                               default='PENDING')
     input_files = models.JSONField(default=list, blank=True)
     result_urls = models.JSONField(default=list, blank=True)
+    input_times = models.JSONField(default=list, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
