@@ -1,5 +1,8 @@
 from functools import partial
 
+from torch import nn
+
+# from layers.TAU.TAUSubBlock import TAUSubBlock
 from ..layers.SICTeDev.Fourier_computing_unit import *
 from ..layers.TAU.TAUSubBlock import TAUSubBlock
 
@@ -629,61 +632,6 @@ class TeDev(nn.Module):
         return y + bias
 
 
-# def generate_positional_encoding(months, C):
-#     T = len(months)
-#     # position = torch.tensor(months, dtype=torch.float, device=months.device).unsqueeze(1)
-#     position = months.clone().detach().unsqueeze(1).to(torch.float).to(months.device)
-#     div_term = torch.exp(torch.arange(0, C, 2, dtype=torch.float32, device=months.device) * (-math.log(10000.0) / C))
-#     pe = torch.zeros(T, C, device=months.device)
-#     pe[:, 0::2] = torch.sin(position * div_term)
-#     pe[:, 1::2] = torch.cos(position * div_term)
-#     pe = pe.unsqueeze(0).detach()   # Add batch dimension
-#     return pe
-
-
-# def generate_positional_encoding(months, C):
-#     # Normalize months to range [0, 1]
-#     # months_normalized = torch.tensor(months, dtype=torch.float32) / 12.0
-#     months_normalized = months.clone().detach().to(torch.float32) / 12.0
-
-#     T = len(months_normalized)
-#     # print('months_normalized:',months_normalized.shape)
-#     position = months_normalized.unsqueeze(1).to(months_normalized.device)
-#     # print('position:',position.shape)
-#     div_term = torch.exp(
-#         torch.arange(0, C, 2, dtype=torch.float32, device=months_normalized.device)
-#         * (-math.log(10000.0) / C)
-#     )
-#     pe = torch.zeros(T, C, device=months_normalized.device)
-#     pe[:, 0::2] = torch.sin(position * div_term)
-#     pe[:, 1::2] = torch.cos(position * div_term)
-#     # print('pe:',pe.shape)
-#     pe = pe.unsqueeze(0).unsqueeze(2)  # Add batch dimension
-#     # print('pe2:',pe.shape)
-
-#     pe = pe.reshape(1, 12, 1, 432, 432)
-#     # print("pe3:", pe)
-#     return pe
-
-
-# class MonthEmbedding(nn.Module):
-#     def __init__(self, embed_size):
-#         super(MonthEmbedding, self).__init__()
-#         self.embedding = nn.Embedding(12, embed_size)
-
-#     def forward(self, months):
-#         return self.embedding(months)
-
-# def embed_month_into_features(images, months, embed_size):
-#     batch_size, channels, height, width = images.shape
-#     month_embedding_layer = MonthEmbedding(embed_size)
-#     months_tensor = torch.tensor(months, dtype=torch.long)
-#     month_embeddings = month_embedding_layer(months_tensor).unsqueeze(2).unsqueeze(3)
-#     month_embeddings = month_embeddings.expand(-1, -1, height, width)
-#     enhanced_features = torch.cat((images, month_embeddings), dim=1)
-#     return enhanced_features
-
-
 class SICTeDev(nn.Module):
     def __init__(
             self,
@@ -723,7 +671,7 @@ class SICTeDev(nn.Module):
         # 初始化位置编码
         # nn.init.uniform_(self.positional_encoding, -0.1, 0.1)
 
-    def forward(self, input_x, input_times):
+    def forward(self, input_x, targets, input_times):
         with torch.autograd.set_detect_anomaly(True):
             assert len(input_x.shape) == 5
 
@@ -791,4 +739,6 @@ class SICTeDev(nn.Module):
             next_frames = next_frames.reshape(B, T, C, H, W)
             next_frames = torch.clamp(next_frames, 0, 1)
 
-            return next_frames
+            loss = self.criterion(next_frames, targets)
+
+            return next_frames, loss

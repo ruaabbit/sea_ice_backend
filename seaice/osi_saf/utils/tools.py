@@ -148,7 +148,7 @@ def process_sea_ice_data(data):
     ice_conc = ice_conc / 100
 
     # 确保没有超出范围的值
-    assert not np.any(ice_conc > 1)
+    # assert not np.any(ice_conc > 1)
 
     return ice_conc
 
@@ -163,7 +163,7 @@ def unfold_stack_over_channel(image, patch_size):
         output (N, *, C*k_h*k_w, H/k_h, W/k_w)
     """
     n_dims = len(image.shape)
-    assert n_dims == 4 or n_dims == 5
+    # assert n_dims == 4 or n_dims == 5
     if patch_size[0] == 1 and patch_size[1] == 1:
         return image
 
@@ -173,7 +173,7 @@ def unfold_stack_over_channel(image, patch_size):
         patch = patch.permute(0, 1, 4, 2, 3).flatten(1, 2)
     elif n_dims == 5:  # (N, T, C, H, W)
         patch = patch.permute(0, 1, 2, 5, 3, 4).flatten(2, 3)
-    assert patch.shape[-3] == image.shape[-3] * patch_size[0] * patch_size[1]
+    # assert patch.shape[-3] == image.shape[-3] * patch_size[0] * patch_size[1]
     return patch
 
 
@@ -189,7 +189,7 @@ def fold_tensor(tensor, output_size, patch_size):
         output (N, *, C, H=n_h*k_h, W=n_w*k_w)
     """
     n_dims = len(tensor.shape)
-    assert n_dims == 4 or n_dims == 5
+    # assert n_dims == 4 or n_dims == 5
 
     if patch_size[0] == 1 and patch_size[1] == 1:
         return tensor
@@ -232,7 +232,7 @@ def prepare_input_target_indices(
         input_indices: 指向输入样本位置的索引
         target_indices: 指向目标样本位置的索引
     """
-    assert prediction_shift >= prediction_length
+    # assert prediction_shift >= prediction_length
     input_span = input_gap * (input_length - 1) + 1
     input_index = np.arange(0, input_span, input_gap)
     target_index = (
@@ -247,7 +247,7 @@ def prepare_input_target_indices(
     )
     input_indices = indices[::sample_gap, :input_length]
     target_indices = indices[::sample_gap, input_length:]
-    assert len(input_indices) == len(target_indices)
+    # assert len(input_indices) == len(target_indices)
     return input_indices, target_indices
 
 

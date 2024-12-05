@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from timm.layers import DropPath
 
-from ..TAU.MixMlp import MixMlp
+from .MixMlp import MixMlp
 
 
 class AttentionModule(nn.Module):

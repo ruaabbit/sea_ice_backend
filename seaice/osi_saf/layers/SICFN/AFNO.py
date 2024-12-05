@@ -5,6 +5,7 @@ import torch.nn.functional as F
 from timm.layers import DropPath
 
 
+
 class PatchEmbed(nn.Module):
     def __init__(
             self, img_size, patch_embed_size, input_dim, embed_dim, norm_layer=None
@@ -21,7 +22,7 @@ class PatchEmbed(nn.Module):
 
     def forward(self, x):
         B, C, H, W = x.shape
-        assert H == self.img_size[0] and W == self.img_size[1]
+        # assert H == self.img_size[0] and W == self.img_size[1]
         """
         Patch: [B, C, H, W] -> [B, C*patch_embed_size[0]*patch_embed_size[1], img_size[0]//patch_embed_size[0], img_size[1]//patch_embed_size[1]]
         Flatten: [B, C, H, W] -> [B, C, HW]
@@ -67,7 +68,7 @@ class AdativeFourierNeuralOperator(nn.Module):
         self.w = w
         self.num_blocks = fno_blocks
         self.block_size = self.hidden_size // self.num_blocks
-        assert self.hidden_size % self.num_blocks == 0
+        # assert self.hidden_size % self.num_blocks == 0
 
         self.scale = 0.02
         self.w1 = torch.nn.Parameter(

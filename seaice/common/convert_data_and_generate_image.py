@@ -8,43 +8,48 @@ from PIL import Image
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 
-land_mask = np.load("seaice/common/data/land_mask.npy")  # 1: land, 0: ocean
+# 全局常量
+LAND_MASK_DATA = np.load("seaice/common/data/land_mask.npy")
+WATER_MASK = (LAND_MASK_DATA == 0)
+LAND_MASK = (LAND_MASK_DATA == 1)
+
+WATER_COLOR = np.array([0, 0.3, 0.8])
+LAND_COLOR = np.array([0.9, 0.8, 0.2])
+ICE_COLOR_BASE = np.array([0.85, 0.85, 0.9])
+ICE_COLOR_RANGE = np.array([0.15, 0.15, 0.1])
 
 
 def prediction_result_to_image(prediction_result: np.ndarray):
-    # 生成带时间戳的随机文件名
-    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-    random_num = random.randint(10000, 99999)
-    file_name = f"predict_task_{timestamp}_{random_num}.png"
+    """
+    使用PIL直接生成图像的备选方案，适用于不需要matplotlib特性的情况
+    """
 
-    buffer = io.BytesIO()
-    data = np.array(prediction_result)
+    # 数据预处理部分相同...
+    data = np.clip(prediction_result, 0, 1)
+    rgb_image = np.zeros((432, 432, 3), dtype=np.float32)
+    ice_mask = WATER_MASK & (data > 0)
+    rgb_image[WATER_MASK & (data == 0)] = WATER_COLOR
+    rgb_image[LAND_MASK] = LAND_COLOR
 
-    # 将数据归一化到0-255范围内
-    data = (data * 255).astype(np.uint8)
+    if np.any(ice_mask):
+        ice_colors = ICE_COLOR_BASE + data[ice_mask, np.newaxis] * ICE_COLOR_RANGE
+        rgb_image[ice_mask] = ice_colors
 
-    # 初始化RGB图像为白色
-    rgb_data = np.ones((data.shape[0], data.shape[1], 3), dtype=np.uint8) * 255
+    # 转换为PIL图像并直接保存
+    rgb_image = (rgb_image * 255).astype(np.uint8)
+    image = Image.fromarray(rgb_image)
 
-    # land_mask部分设为黄色
-    rgb_data[land_mask == 1] = [200, 200, 0]
+    with io.BytesIO() as buffer:
+        image.save(buffer,
+                   format='PNG',
+                   optimize=True)  # 启用PNG优化
 
-    # data为0且land_mask为0的部分设为蓝色
-    rgb_data[(data == 0) & (land_mask == 0)] = [0, 0, 200]
+        # 文件保存部分相
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+        file_name = f"predict_task_{timestamp}_{random.randint(10000, 99999)}.png"
+        file_path = Path("predicts") / file_name
 
-    # 创建图片对象
-    image = Image.fromarray(rgb_data)
+        if not default_storage.exists(str(file_path)):
+            file_path = default_storage.save(str(file_path), ContentFile(buffer.getvalue()))
 
-    # 保存为 PNG 图片
-    image.save(buffer, format='PNG')
-
-    # 保存文件
-    file_path = Path("predicts") / file_name
-    if not default_storage.exists(str(file_path)):
-        file_path = default_storage.save(
-            str(file_path), ContentFile(buffer.getvalue())
-        )
-    file_url = default_storage.url(file_path)
-    buffer.close()
-
-    return file_url
+    return default_storage.url(file_path)

@@ -19,18 +19,6 @@ class Configs:
 
 configs = Configs()
 
-# configs.model = "ConvLSTM"
-# configs.model = "PredRNN"
-# configs.model = "PredRNNv2"
-# configs.model = "E3DLSTM"
-# configs.model = "SimVP"
-# configs.model = "TAU"
-# configs.model = "ConvNeXt"
-# configs.model = "InceptionNeXt"
-# configs.model = "Swin_Transformer"
-# configs.model = "SICFN"
-# configs.model = "VMRNN_B_Model"
-# configs.model = "WaST"
 configs.model = "SICTeDev"
 
 # trainer related
@@ -141,19 +129,3 @@ configs.mlp_ratio = 2.0
 # SICTeDev
 configs.incep_ker = [3, 5, 7, 11]
 configs.groups = 8
-
-# paths
-configs.fine_tune_data_path = "./data/full_sic_update.nc"
-# 使用 full_sic_update 时保存的权重文件后缀为update
-# if(stage.flag == 0):
-# configs.full_data_path = "./data/siconca_new2.nc"
-# configs.full_data_path = "../../root/autodl-tmp/NSIDC/full_sic.nc"
-# else:
-# configs.full_data_path = "./data/MRI_r1i1p1f1_all.nc"
-configs.full_data_path = "./data/full_sic_update.nc"
-configs.train_log_path = "train_logs"
-configs.test_results_path = "test_results"
-configs.grad_results_path = "grad_results"
-configs.grad_month = 1
-configs.grad_type = "variation"
-configs.grad_save_dir = f"/root/autodl-tmp/grad_results/{configs.grad_type}"

@@ -1,8 +1,7 @@
 import torch
 import torch.fft
-# from modules import ConvSC, Inception
 import torch.nn.functional as F
-from timm.layers import DropPath
+from timm.models.layers import DropPath
 from torch import nn
 
 

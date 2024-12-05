@@ -110,10 +110,8 @@ def month_prediction(request):
         while current_date < start_date + relativedelta.relativedelta(months=months):
             input_times.append(current_date.month)
             # Move to the next month
-            if current_date.month == 12:
-                current_date = current_date.replace(year=current_date.year + 1, month=1)
-            else:
-                current_date = current_date.replace(month=current_date.month + 1)
+            current_date = current_date + relativedelta.relativedelta(months=1)
+
         # Open images from local paths
         images = []
         for path_str in image_paths:
@@ -129,7 +127,7 @@ def month_prediction(request):
         task = DownloadPredictTask.objects.create(
             start_date=start_date,
             end_date=start_date + relativedelta.relativedelta(months=months),
-            task_type='DAILY',
+            task_type='MONTHLY',
             source='API',
             status='IN_PROGRESS'
         )
@@ -144,9 +142,11 @@ def month_prediction(request):
         for prediction in predictions:
             file_url = prediction_result_to_image(prediction[0])
             urls.append(file_url)
+
         task.result_urls = urls
         task.status = 'COMPLETED'
         task.save()
+
         # Generate 12 months of image paths and dates
         data = []
         for i in range(months):
@@ -158,7 +158,9 @@ def month_prediction(request):
                 }
             )
 
-        return JsonResponse({"data": data})
+        return JsonResponse({
+            "data": data,
+        })
 
     except Exception as e:
         print(e)
@@ -249,3 +251,35 @@ def upload_image(request):
     return JsonResponse(
         {"message": "Image uploaded successfully", "image_url": str(image_url)}
     )
+
+
+@require_POST
+@csrf_exempt
+def dynamics_analysis(request):
+    months = 12
+    try:
+        data = json.loads(request.body).get("data")
+
+        start_time_str = data.get("start_time")
+        start_time = datetime.strptime(start_time_str, "%Y%m")
+        end_time_str = data.get("end_time")
+        end_time = datetime.strptime(end_time_str, "%Y%m")
+        grad_month = data.get("grad_month")
+        grad_type = data.get("grad_type")
+
+        results = predict_month.grad(int(start_time.strftime("%Y%m")), int(end_time.strftime("%Y%m")), int(grad_month),
+                                     grad_type)
+
+        data = []
+        for i in range(months):
+            current_date = start_time + relativedelta.relativedelta(months=i)
+            data.append(
+                {
+                    "path": settings.HOST_PREFIX + results[i],
+                    "date": current_date.strftime("%m"),
+                }
+            )
+
+        return JsonResponse({"data": data})
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)

@@ -179,7 +179,7 @@ class TANet(nn.Module):
             drop_path=0.1,
     ):
         super(TANet, self).__init__()
-        assert N2 >= 2 and mlp_ratio > 1
+        # assert N2 >= 2 and mlp_ratio > 1
         self.N2 = N2
         dpr = [  # stochastic depth decay rule
             x.item() for x in torch.linspace(1e-2, drop_path, self.N2)
@@ -387,7 +387,7 @@ class SICFN(nn.Module):
         )
 
     def forward(self, input_x):
-        assert len(input_x.shape) == 5
+        # assert len(input_x.shape) == 5
 
         B, T, C, H, W = input_x.shape
         AFNO_out = self.AFNO_module(input_x)

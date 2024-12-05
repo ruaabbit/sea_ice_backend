@@ -1,12 +1,11 @@
-import datetime
-
-import netCDF4 as nc
 import numpy as np
 import torch.nn.functional as F
-import xarray as xr
-from dateutil.relativedelta import relativedelta
 from torch.utils.data import Dataset
-
+from dateutil.relativedelta import relativedelta
+import datetime
+import xarray as xr
+import netCDF4 as nc
+from dateutil.relativedelta import relativedelta
 
 def cal_time_length(start_time, end_time):
     """
@@ -25,7 +24,7 @@ def cal_time_length(start_time, end_time):
 
     # 使用 relativedelta 计算月份差距
     delta = relativedelta(end, start)
-
+    
     # 计算月份数差距并加上 1（包括开始日期）
     # length = delta.years * 12 + delta.months + 1
     length = delta.years * 12 + delta.months + 1
@@ -146,6 +145,7 @@ def post_process_data(img):
     # 归一化
     img = img / 100
 
+
     # # 断言确保没有超出范围的值
     assert not np.any(img > 1)
 
@@ -211,7 +211,7 @@ def fold_tensor(tensor, output_size, patch_size):
 
 
 def prepare_inputs_targets(
-        len_time, input_gap, input_length, pred_shift, pred_gap, pred_length, samples_gap
+    len_time, input_gap, input_length, pred_shift, pred_gap, pred_length, samples_gap
 ):
     """
     Args:
@@ -241,18 +241,19 @@ def prepare_inputs_targets(
     return idx_inputs, idx_targets
 
 
+
 class SIC_dataset(Dataset):
     def __init__(
-            self,
-            full_data_path,
-            start_time,
-            end_time,
-            input_gap,
-            input_length,
-            pred_shift,
-            pred_gap,
-            pred_length,
-            samples_gap,
+        self,
+        full_data_path,
+        start_time,
+        end_time,
+        input_gap,
+        input_length,
+        pred_shift,
+        pred_gap,
+        pred_length,
+        samples_gap,
     ):
         """
         Args:
@@ -313,6 +314,7 @@ class SIC_dataset(Dataset):
         return np.array(self.times)[
             np.concatenate([self.idx_inputs, self.idx_targets], axis=1)
         ]
+    
 
     #################
     # def GetTimesArray(self):
@@ -324,13 +326,13 @@ class SIC_dataset(Dataset):
     def GetDataSetShape(self):
         inputs_B = self.idx_inputs.shape[0]
         inputs_T, inputs_C, inputs_H, inputs_W = self.data[self.idx_inputs[0]][
-                                                 :, None
-                                                 ].shape
+            :, None
+        ].shape
 
         targets_B = self.idx_targets.shape[0]
         targets_T, targets_C, targets_H, targets_W = self.data[self.idx_targets[0]][
-                                                     :, None
-                                                     ].shape
+            :, None
+        ].shape
 
         return {
             "inputs(B, T, C, H, W)": (inputs_B, inputs_T, inputs_C, inputs_H, inputs_W),

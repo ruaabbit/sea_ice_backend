@@ -63,7 +63,7 @@ def predict_ice_concentration_from_nc_files(
         input_array = np.where(input_array == -32767, 0, input_array)
         input_array = input_array / 100.0
         nc_data.append(input_array)
-    return _predict(np.array(nc_data))
+    return _predict(np.stack(nc_data))
 
 
 def _predict(input_array: np.ndarray) -> np.ndarray:
@@ -76,14 +76,19 @@ def _predict(input_array: np.ndarray) -> np.ndarray:
     返回:
         np.ndarray: 预测的海冰浓度图，形状为 (14, H, W)
     """
-    # 转换为张量并调整形状
-    input_tensor = torch.from_numpy(input_array)[None, :, None, :, :].float().to(device)
+    try:
+        # 转换为张量并调整形状，确保数据在GPU上
+        input_tensor = torch.from_numpy(input_array).float()
+        input_tensor = input_tensor[None, :, None, :, :].to(device)
 
-    # 模型预测
-    with torch.no_grad():
-        output = model(input_tensor)
+        # 模型预测
+        with torch.no_grad():
+            output = model(input_tensor)
 
-    # 转换为 numpy 数组
-    prediction = output.cpu().numpy()[0]
-    torch.cuda.empty_cache()
-    return prediction
+        # 转换为 numpy 数组
+        prediction = output.cpu().numpy()[0]
+
+        return prediction
+    finally:
+        # 清理GPU缓存
+        torch.cuda.empty_cache()
