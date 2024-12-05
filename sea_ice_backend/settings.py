@@ -62,8 +62,20 @@ WSGI_APPLICATION = 'sea_ice_backend.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        # SQLite
+        # 'ENGINE': 'django.db.backends.sqlite3',
+        # 'NAME': BASE_DIR / 'db.sqlite3',
+
+        # MariaDB
+        'ENGINE': 'django.db.backends.mysql',
+        'NAME': os.getenv('DJANGO_DB_NAME', 'seaice'),
+        'USER': os.getenv('DJANGO_DB_USER', 'root'),
+        'PASSWORD': os.getenv('DJANGO_DB_PASSWORD', 'liuZHAO65266450'),
+        'HOST': os.getenv('DJANGO_DB_HOST', 'localhost'),
+        'PORT': os.getenv('DJANGO_DB_PORT', '3306'),
+        'CONN_MAX_AGE': 600,
+        'CONN_HEALTH_CHECKS': True
+
     }
 }
 
