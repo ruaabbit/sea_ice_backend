@@ -1,7 +1,7 @@
 import torch
 import torch.fft
 import torch.nn.functional as F
-from timm.models.layers import DropPath
+from timm.layers import DropPath
 from torch import nn
 
 

@@ -10,8 +10,8 @@ Copyright (c) 2023 by ${git_name_email}, All Rights Reserved.
 """
 import torch.nn as nn
 
-from models.SICTeDev import SICTeDev
-from utils import unfold_StackOverChannel, fold_tensor
+from .models.SICTeDev import SICTeDev
+from .utils import unfold_StackOverChannel, fold_tensor
 
 
 class IceNet(nn.Module):

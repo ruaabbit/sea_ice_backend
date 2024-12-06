@@ -15,6 +15,7 @@ from sea_ice_backend import settings
 from seaice.common.convert_data_and_generate_image import prediction_result_to_image
 from seaice.models import DownloadPredictTask
 from seaice.osi_450_a import predict as predict_month
+from seaice.osi_450_a.grad import grad_nb
 from seaice.osi_saf import predict as predict_day
 
 
@@ -256,7 +257,6 @@ def upload_image(request):
 @require_POST
 @csrf_exempt
 def dynamics_analysis(request):
-    months = 12
     try:
         data = json.loads(request.body).get("data")
 
@@ -267,15 +267,15 @@ def dynamics_analysis(request):
         grad_month = data.get("grad_month")
         grad_type = data.get("grad_type")
 
-        results = predict_month.grad(int(start_time.strftime("%Y%m")), int(end_time.strftime("%Y%m")), int(grad_month),
-                                     grad_type)
+        results = grad_nb(int(start_time.strftime("%Y%m")), int(end_time.strftime("%Y%m")), int(grad_month),
+                          grad_type)
 
         data = []
-        for i in range(months):
+        for i, result in enumerate(results):
             current_date = start_time + relativedelta.relativedelta(months=i)
             data.append(
                 {
-                    "path": settings.HOST_PREFIX + results[i],
+                    "path": settings.HOST_PREFIX + result,
                     "date": current_date.strftime("%m"),
                 }
             )

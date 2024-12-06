@@ -1,7 +1,5 @@
 from functools import partial
 
-from torch import nn
-
 # from layers.TAU.TAUSubBlock import TAUSubBlock
 from ..layers.SICTeDev.Fourier_computing_unit import *
 from ..layers.TAU.TAUSubBlock import TAUSubBlock
