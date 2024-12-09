@@ -3,6 +3,7 @@ import datetime
 import json
 from pathlib import Path
 
+from PIL import Image
 from celery import shared_task
 from dateutil.relativedelta import relativedelta
 
@@ -61,6 +62,49 @@ def _predict_and_save(input_files, input_times, task_type):
         result_urls.append(file_url)
 
     return result_urls
+
+
+@shared_task
+def predict_and_return(input_images_paths, input_times, task_type, task_id):
+    task = DownloadPredictTask.objects.get(id=task_id)
+    # Open images from local paths
+    images = []
+    for path_str in input_images_paths:
+        try:
+            with Image.open(path_str) as img:
+                images.append(img.copy())
+        except Exception as e:
+            raise ValueError(f"Failed to open image {path_str}: {str(e)}")
+    task.input_files = input_images_paths
+    task.input_times = input_times
+
+    if task_type == 'DAILY':
+        predictions = predict.predict_ice_concentration_from_images(images)
+    elif task_type == 'MONTHLY':
+        predictions = predict_month.predict_ice_concentration_from_images(images, input_times)
+    else:
+        task.status = 'FAILED'
+        task.save()
+        raise ValueError("task_type must be either 'DAILY' or 'MONTHLY'")
+    urls = []
+    for prediction in predictions:
+        file_url = prediction_result_to_image(prediction[0])
+        urls.append(file_url)
+    task.result_urls = urls
+    task.status = 'COMPLETED'
+    task.save()
+    return json.dumps({
+        'input_files': task.input_files,
+        'input_times': task.input_times,
+        'result_urls': task.result_urls,
+        'task_id': task.id,
+        'status': task.status
+    })
+
+
+@shared_task
+def grad_and_return(input_images, input_times):
+    pass
 
 
 @shared_task

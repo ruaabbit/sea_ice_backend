@@ -3,7 +3,7 @@ import json
 from datetime import datetime
 from pathlib import Path
 
-from PIL import Image
+from celery.result import AsyncResult
 from dateutil import relativedelta
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
@@ -12,17 +12,22 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST, require_GET
 
 from sea_ice_backend import settings
-from seaice.common.convert_data_and_generate_image import prediction_result_to_image
 from seaice.models import DownloadPredictTask
-from seaice.osi_450_a import predict as predict_month
 from seaice.osi_450_a.grad import grad_nb
-from seaice.osi_saf import predict as predict_day
+from seaice.tasks import predict_and_return
 
 
-# 日预测视图
+def get_celery_task_result(task_id):
+    result = AsyncResult(task_id)
+    if result.ready():
+        return result.get()
+    else:
+        return None
+
+
 @require_POST
 @csrf_exempt
-def day_prediction(request):
+def create_day_prediction_task(request):
     days = 14
     try:
         data = json.loads(request.body).get("data")
@@ -30,64 +35,65 @@ def day_prediction(request):
         start_date = datetime.strptime(start_date_str, "%Y/%m/%d")
         image_paths = data.get("image_paths", [])
 
-        if len(image_paths) != 14:
+        if len(image_paths) != days:
             return JsonResponse(
-                {"error": "Please provide exactly 14 image paths"}, status=400
+                {"error": f"Please provide exactly {days} image paths for daily prediction"},
+                status=400,
             )
-
-        # Open images from local paths
-        images = []
-        for path_str in image_paths:
-            try:
-                with Image.open(path_str) as img:
-                    images.append(img.copy())
-            except Exception as e:
-                return JsonResponse(
-                    {"error": f"Failed to open image {path_str}: {str(e)}"}, status=400
-                )
 
         # 创建数据库任务记录
         task = DownloadPredictTask.objects.create(
             start_date=start_date,
-            end_date=start_date + relativedelta.relativedelta(days=days - 1),
+            end_date=start_date + relativedelta.relativedelta(days=days),
             task_type='DAILY',
             source='API',
             status='IN_PROGRESS'
         )
-
-        # Generate predictions
-        predictions = predict_day.predict_ice_concentration_from_images(images)
-
-        # Save predictions as images and generate URLs
-        urls = []
-        for prediction in predictions:
-            file_url = prediction_result_to_image(prediction[0])
-            urls.append(file_url)
-        task.result_urls = urls
-        task.status = 'COMPLETED'
+        # 保存任务ID
         task.save()
-        # 生成14天的图片路径和日期信息
-        data = []
-        for i in range(days):
-            current_date = start_date + relativedelta.relativedelta(days=i + 1)
-            # 假设图片路径以日期为名，并存储在某个路径下
-            data.append(
-                {
-                    "path": settings.HOST_PREFIX + urls[i],
-                    "date": current_date.strftime("%Y-%m-%d"),
-                }
-            )
-        return JsonResponse({"data": data})
+        # 异步调用 Celery 任务
+        async_result = predict_and_return.delay(image_paths, [], 'DAILY', task.id)
+
+        return JsonResponse({'data': {"task_id": task.id,
+                                      "celery_id": async_result.id}})
 
     except Exception as e:
         print(e)
         return JsonResponse({"error": str(e)}, status=500)
 
 
-# 月预测视图
+@require_GET
+def get_day_prediction_result(request, task_id):
+    try:
+        task = DownloadPredictTask.objects.get(id=task_id)
+
+        if task.status != 'COMPLETED':
+            return JsonResponse({"error": "Task is not yet completed"}, status=400)
+
+        # 生成14天的图片路径和日期信息
+        data = []
+        start_date = task.start_date
+        for i, url in enumerate(task.result_urls):
+            current_date = start_date + relativedelta.relativedelta(days=i + 1)
+            data.append(
+                {
+                    "path": settings.HOST_PREFIX + url,
+                    "date": current_date.strftime("%Y-%m-%d"),
+                }
+            )
+
+        return JsonResponse({"data": data})
+
+    except DownloadPredictTask.DoesNotExist:
+        return JsonResponse({"error": "Task not found"}, status=404)
+    except Exception as e:
+        print(e)
+        return JsonResponse({"error": str(e)}, status=500)
+
+
 @require_POST
 @csrf_exempt
-def month_prediction(request):
+def create_month_prediction_task(request):
     months = 12
     try:
         data = json.loads(request.body).get("data")
@@ -95,12 +101,11 @@ def month_prediction(request):
         start_date = datetime.strptime(start_date_str, "%Y/%m/%d")
         image_paths = data.get("image_paths", [])
 
-        if len(image_paths) != 12:
+        if len(image_paths) != months:
             return JsonResponse(
-                {"error": "Please provide exactly 12 image path for monthly prediction"},
+                {"error": f"Please provide exactly {months} image paths for monthly prediction"},
                 status=400,
             )
-
         # Initialize the current date to the start date
         current_date = start_date
 
@@ -113,17 +118,6 @@ def month_prediction(request):
             # Move to the next month
             current_date = current_date + relativedelta.relativedelta(months=1)
 
-        # Open images from local paths
-        images = []
-        for path_str in image_paths:
-            try:
-                with Image.open(path_str) as img:
-                    images.append(img.copy())
-            except Exception as e:
-                return JsonResponse(
-                    {"error": f"Failed to open image {path_str}: {str(e)}"}, status=400
-                )
-
         # 创建数据库任务记录
         task = DownloadPredictTask.objects.create(
             start_date=start_date,
@@ -132,37 +126,43 @@ def month_prediction(request):
             source='API',
             status='IN_PROGRESS'
         )
-
-        # Generate predictions for the next 12 months
-        predictions = predict_month.predict_ice_concentration_from_images(
-            images, input_times
-        )  # Repeating the same image for each month
-
-        # Save predictions as images and generate URLs
-        urls = []
-        for prediction in predictions:
-            file_url = prediction_result_to_image(prediction[0])
-            urls.append(file_url)
-
-        task.result_urls = urls
-        task.status = 'COMPLETED'
+        # 保存任务ID
         task.save()
+        # 异步调用 Celery 任务
+        async_result = predict_and_return.delay(image_paths, input_times, 'MONTHLY', task.id)
 
-        # Generate 12 months of image paths and dates
+        return JsonResponse({'data': {"task_id": task.id,
+                                      "celery_id": async_result.id}})
+
+    except Exception as e:
+        print(e)
+        return JsonResponse({"error": str(e)}, status=500)
+
+
+@require_GET
+def get_month_prediction_result(request, task_id):
+    try:
+        task = DownloadPredictTask.objects.get(id=task_id)
+
+        if task.status != 'COMPLETED':
+            return JsonResponse({"error": "Task is not yet completed"}, status=400)
+
+        # 生成12个月的图片路径和日期信息
         data = []
-        for i in range(months):
+        start_date = task.start_date
+        for i, url in enumerate(task.result_urls):
             current_date = start_date + relativedelta.relativedelta(months=i + 1)
             data.append(
                 {
-                    "path": settings.HOST_PREFIX + urls[i],
+                    "path": settings.HOST_PREFIX + url,
                     "date": current_date.strftime("%Y-%m"),
                 }
             )
 
-        return JsonResponse({
-            "data": data,
-        })
+        return JsonResponse({"data": data})
 
+    except DownloadPredictTask.DoesNotExist:
+        return JsonResponse({"error": "Task not found"}, status=404)
     except Exception as e:
         print(e)
         return JsonResponse({"error": str(e)}, status=500)
