@@ -2,6 +2,10 @@ from django.contrib import admin
 
 from .models import DownloadPredictTask
 
+admin.site.site_header = '北极海冰预测系统'
+admin.site.site_title = '北极海冰预测系统'
+admin.site.index_title = '北极海冰预测系统'
+
 
 @admin.register(DownloadPredictTask)
 class DownloadPredictTaskAdmin(admin.ModelAdmin):

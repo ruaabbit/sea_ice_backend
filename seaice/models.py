@@ -30,3 +30,7 @@ class DownloadPredictTask(models.Model):
 
     def __str__(self):
         return f"Task from {self.start_date} to {self.end_date} - {self.status}"
+
+    class Meta:
+        verbose_name = '下载预测任务'
+        verbose_name_plural = verbose_name

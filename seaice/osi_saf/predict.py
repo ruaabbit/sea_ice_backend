@@ -10,10 +10,16 @@ from .utils.model_factory import IceNet
 model_path: str = "seaice/osi_saf/checkpoints/checkpoint_SICFN_14.pt"
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-model = IceNet().to(device)
-checkpoint = torch.load(model_path, map_location=device, weights_only=True)
-model.load_state_dict(checkpoint["net"])
-model.eval()
+model = None
+
+
+def load_model():
+    global model
+    if model is None:
+        model = IceNet().to(device)
+        checkpoint = torch.load(model_path, map_location=device, weights_only=True)
+        model.load_state_dict(checkpoint["net"])
+        model.eval()
 
 
 def predict_ice_concentration_from_images(
@@ -28,6 +34,8 @@ def predict_ice_concentration_from_images(
     返回:
         np.ndarray: 预测的海冰浓度图，形状为 (14, H, W)
     """
+    load_model()
+
     processed_images = []
     for img in image_list:
         if img.mode != "L":
@@ -37,7 +45,7 @@ def predict_ice_concentration_from_images(
     input_array = np.stack(processed_images)
     # 针对图片的数据预处理，除以255
     input_array = input_array / 255.0
-    return _predict(input_array)
+    return _predict(model, input_array)
 
 
 def predict_ice_concentration_from_nc_files(
@@ -53,6 +61,8 @@ def predict_ice_concentration_from_nc_files(
     返回：
         np.ndarray: 预测的海冰浓度图，形状为 (14, H, W)
     """
+    load_model()
+
     nc_data = []
     # 读取 nc 文件
     for nc_file_path in nc_file_paths:
@@ -63,10 +73,10 @@ def predict_ice_concentration_from_nc_files(
         input_array = np.where(input_array == -32767, 0, input_array)
         input_array = input_array / 100.0
         nc_data.append(input_array)
-    return _predict(np.stack(nc_data))
+    return _predict(model, np.stack(nc_data))
 
 
-def _predict(input_array: np.ndarray) -> np.ndarray:
+def _predict(net, input_array: np.ndarray) -> np.ndarray:
     """
     私有函数，执行实际的预测工作。
 
@@ -83,7 +93,7 @@ def _predict(input_array: np.ndarray) -> np.ndarray:
 
         # 模型预测
         with torch.no_grad():
-            output = model(input_tensor)
+            output = net(input_tensor)
 
         # 转换为 numpy 数组
         prediction = output.cpu().numpy()[0]
