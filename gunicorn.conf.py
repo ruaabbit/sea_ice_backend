@@ -1,7 +1,7 @@
 # gunicorn.conf.py
 
 # 设置工作进程数
-workers = 1
+workers = 4
 
 # 绑定的地址和端口
 bind = '127.0.0.1:8000'

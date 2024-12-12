@@ -10,5 +10,6 @@ urlpatterns = [
     path('month-prediction/<int:task_id>', views.get_month_prediction_result),
     path('realtime-day-prediction', views.realtime_day_prediction),
     path('realtime-month-prediction', views.realtime_month_prediction),
-    path('dynamics-analysis', views.dynamics_analysis),
+    path('dynamics-analysis', views.create_dynamics_analysis),
+    path('dynamics-analysis/<int:task_id>', views.get_dynamics_analysis_result),
 ]

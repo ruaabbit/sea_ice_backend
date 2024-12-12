@@ -10,8 +10,9 @@ from dateutil.relativedelta import relativedelta
 from sea_ice_backend import settings
 from seaice.common.convert_data_and_generate_image import prediction_result_to_image
 from seaice.common.download_and_organize_data import download_and_organize_data
-from seaice.models import DownloadPredictTask
+from seaice.models import DownloadPredictTask, DynamicGradTask
 from seaice.osi_450_a import predict as predict_month
+from seaice.osi_450_a.grad import grad_nb
 from seaice.osi_saf import predict
 
 
@@ -103,8 +104,39 @@ def predict_and_return(input_images_paths, input_times, task_type, task_id):
 
 
 @shared_task
-def grad_and_return(input_images, input_times):
-    pass
+def grad_and_return(start_time: datetime.datetime, end_time: datetime.datetime, grad_month: int, grad_type: str,
+                    task_id: int):
+    task = DynamicGradTask.objects.get(id=task_id)
+    error = ''
+    task.start_date = start_time
+    task.end_date = end_time
+    task.grad_month = grad_month
+    task.grad_type = grad_type
+
+    start_time = int(start_time.strftime("%Y%m"))
+    end_time = int(end_time.strftime("%Y%m"))
+
+    try:
+        result_urls = grad_nb(start_time, end_time, grad_month,
+                              grad_type)
+        task.result_urls = result_urls
+        task.status = 'COMPLETED'
+    except Exception as e:
+        task.status = 'FAILED'
+        error = e
+    finally:
+        task.save()
+
+    return json.dumps({
+        'start_time': task.start_date.strftime("%Y%m"),
+        'end_time': task.end_date.strftime("%Y%m"),
+        'grad_month': task.grad_month,
+        'grad_type': task.grad_type,
+        'result_urls': task.result_urls,
+        'task_id': task.id,
+        'status': task.status,
+        'error': str(error)
+    })
 
 
 @shared_task

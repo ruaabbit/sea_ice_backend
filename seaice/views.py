@@ -12,9 +12,8 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST, require_GET
 
 from sea_ice_backend import settings
-from seaice.models import DownloadPredictTask
-from seaice.osi_450_a.grad import grad_nb
-from seaice.tasks import predict_and_return
+from seaice.models import DownloadPredictTask, DynamicGradTask
+from seaice.tasks import predict_and_return, grad_and_return
 
 
 def get_celery_task_result(task_id):
@@ -67,9 +66,10 @@ def get_day_prediction_result(request, task_id):
     try:
         task = DownloadPredictTask.objects.get(id=task_id)
 
-        if task.status != 'COMPLETED':
+        if task.status == 'IN_PROGRESS':
             return JsonResponse({"error": "Task is not yet completed"}, status=400)
-
+        elif task.status == 'FAILED':
+            return JsonResponse({"error": "Task failed"}, status=500)
         # 生成14天的图片路径和日期信息
         data = []
         start_date = task.start_date
@@ -144,9 +144,10 @@ def get_month_prediction_result(request, task_id):
     try:
         task = DownloadPredictTask.objects.get(id=task_id)
 
-        if task.status != 'COMPLETED':
+        if task.status == 'IN_PROGRESS':
             return JsonResponse({"error": "Task is not yet completed"}, status=400)
-
+        elif task.status == 'FAILED':
+            return JsonResponse({"error": "Task failed"}, status=500)
         # 生成12个月的图片路径和日期信息
         data = []
         start_date = task.start_date
@@ -256,7 +257,7 @@ def upload_image(request):
 
 @require_POST
 @csrf_exempt
-def dynamics_analysis(request):
+def create_dynamics_analysis(request):
     try:
         data = json.loads(request.body).get("data")
 
@@ -267,19 +268,48 @@ def dynamics_analysis(request):
         grad_month = data.get("grad_month")
         grad_type = data.get("grad_type")
 
-        results = grad_nb(int(start_time.strftime("%Y%m")), int(end_time.strftime("%Y%m")), int(grad_month),
-                          grad_type)
+        # 创建数据库任务记录
+        task = DynamicGradTask.objects.create(
+            start_date=start_time,
+            end_date=end_time,
+            grad_month=grad_month,
+            grad_type=grad_type,
+            status='IN_PROGRESS'
+        )
+        # 保存任务ID
+        task.save()
 
+        async_result = grad_and_return.delay(start_time, end_time,
+                                             int(grad_month),
+                                             grad_type, task.id)
+
+        return JsonResponse({"data": {"task_id": task.id,
+                                      "celery_id": async_result.id}})
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
+
+
+@require_GET
+def get_dynamics_analysis_result(request, task_id):
+    try:
+        task = DynamicGradTask.objects.get(id=task_id)
+
+        if task.status == 'IN_PROGRESS':
+            return JsonResponse({"error": "Task is not yet completed"}, status=400)
+        elif task.status == 'FAILED':
+            return JsonResponse({"error": "Task failed"}, status=500)
         data = []
-        for i, result in enumerate(results):
-            current_date = start_time + relativedelta.relativedelta(months=i)
-            data.append(
-                {
-                    "path": settings.HOST_PREFIX + result,
-                    "date": current_date.strftime("%m"),
-                }
-            )
+        start_date = task.start_date
+        for i, url in enumerate(task.result_urls):
+            current_date = start_date + relativedelta.relativedelta(months=i)
+            data.append({
+                "path": settings.HOST_PREFIX + url,
+                "date": current_date.strftime("%m") + '月',
+            })
 
         return JsonResponse({"data": data})
+
+    except DynamicGradTask.DoesNotExist:
+        return JsonResponse({"error": "Task not found"}, status=404)
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)

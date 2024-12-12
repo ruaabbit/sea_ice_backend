@@ -29,8 +29,30 @@ class DownloadPredictTask(models.Model):
     )
 
     def __str__(self):
-        return f"Task from {self.start_date} to {self.end_date} - {self.status}"
+        return f"Download Predict Task from {self.start_date} to {self.end_date} - {self.status}"
 
     class Meta:
         verbose_name = '下载预测任务'
+        verbose_name_plural = verbose_name
+
+
+class DynamicGradTask(models.Model):
+    status = models.CharField(max_length=20, choices=[('PENDING', 'Pending'), ('IN_PROGRESS', 'In Progress'),
+                                                      ('COMPLETED', 'Completed'), ('FAILED', 'Failed')],
+                              default='PENDING')
+
+    start_date = models.DateField()
+    end_date = models.DateField()
+    grad_month = models.IntegerField()
+    grad_type = models.CharField(max_length=20, choices=[('sum', '海冰面积'), ('sqrt', '海冰变化')],
+                                 default='sum')
+    result_urls = models.JSONField(default=list, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Dynamic Grad Task from {self.start_date} to {self.end_date} - {self.status}"
+
+    class Meta:
+        verbose_name = '动力学分析任务'
         verbose_name_plural = verbose_name
