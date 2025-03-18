@@ -96,7 +96,8 @@ AUTH_PASSWORD_VALIDATORS = [
 
 CSRF_TRUSTED_ORIGINS = [
     'https://seaice.52lxy.one:20443',
-    'https://ai-ouc.cn'
+    'https://ai-ouc.cn',
+    'https://www.ai-ouc.cn'
 ]
 
 CORS_ALLOW_ALL_ORIGINS = True
