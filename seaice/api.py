@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import List, Optional, Any
+from typing import List, Optional, Any, Dict, Generic, TypeVar
 import hashlib
 from pathlib import Path
 
@@ -62,6 +62,13 @@ class ErrorResponse(Schema):
     error: str
 
 
+# 统一响应格式
+class StandardResponse(Schema):
+    success: bool
+    message: str
+    data: Optional[Dict] = None
+
+
 def get_celery_task_result(task_id):
     result = AsyncResult(task_id)
     if result.ready():
@@ -70,9 +77,7 @@ def get_celery_task_result(task_id):
         return None
 
 
-@api.post(
-    "/predict/day", response={200: TaskResponse, 400: ErrorResponse, 500: ErrorResponse}
-)
+@api.post("/predict/day", response=StandardResponse)
 def create_day_prediction_task(request, data: DayPredictionIn):
     days = 14
     try:
@@ -81,9 +86,11 @@ def create_day_prediction_task(request, data: DayPredictionIn):
         image_paths = data.image_paths
 
         if len(image_paths) != days:
-            return 400, {
-                "error": f"Please provide exactly {days} image paths for daily prediction"
-            }
+            return StandardResponse(
+                success=False,
+                message=f"请提供正好{days}个图像路径用于逐日预测",
+                data=None,
+            )
 
         # 创建数据库任务记录
         task = DownloadPredictTask.objects.create(
@@ -98,30 +105,26 @@ def create_day_prediction_task(request, data: DayPredictionIn):
         # 异步调用 Celery 任务
         async_result = predict_and_return.delay(image_paths, [], "DAILY", task.id)
 
-        return 200, {"task_id": task.id, "celery_id": async_result.id}
+        return StandardResponse(
+            success=True,
+            message="逐日预测任务已创建",
+            data={"task_id": task.id, "celery_id": async_result.id},
+        )
 
     except Exception as e:
         print(e)
-        return 500, {"error": str(e)}
+        return StandardResponse(success=False, message=f"发生错误: {str(e)}", data=None)
 
 
-@api.get(
-    "/predict/day/{task_id}",
-    response={
-        200: PredictionResultResponse,
-        400: ErrorResponse,
-        404: ErrorResponse,
-        500: ErrorResponse,
-    },
-)
+@api.get("/predict/day/{task_id}", response=StandardResponse)
 def get_day_prediction_result(request, task_id: int):
     try:
         task = DownloadPredictTask.objects.get(id=task_id)
 
         if task.status == "IN_PROGRESS":
-            return 400, {"error": "Task is not yet completed"}
+            return StandardResponse(success=False, message="任务尚未完成", data=None)
         elif task.status == "FAILED":
-            return 500, {"error": "Task failed"}
+            return StandardResponse(success=False, message="任务失败", data=None)
 
         # 生成14天的图片路径和日期信息
         data = []
@@ -135,19 +138,18 @@ def get_day_prediction_result(request, task_id: int):
                 }
             )
 
-        return 200, {"data": data}
+        return StandardResponse(
+            success=True, message="获取逐日预测结果成功", data={"data": data}
+        )
 
     except DownloadPredictTask.DoesNotExist:
-        return 404, {"error": "Task not found"}
+        return StandardResponse(success=False, message="任务未找到", data=None)
     except Exception as e:
         print(e)
-        return 500, {"error": str(e)}
+        return StandardResponse(success=False, message=f"发生错误: {str(e)}", data=None)
 
 
-@api.post(
-    "/predict/month",
-    response={200: TaskResponse, 400: ErrorResponse, 500: ErrorResponse},
-)
+@api.post("/predict/month", response=StandardResponse)
 def create_month_prediction_task(request, data: MonthPredictionIn):
     months = 12
     try:
@@ -156,9 +158,11 @@ def create_month_prediction_task(request, data: MonthPredictionIn):
         image_paths = data.image_paths
 
         if len(image_paths) != months:
-            return 400, {
-                "error": f"Please provide exactly {months} image paths for monthly prediction"
-            }
+            return StandardResponse(
+                success=False,
+                message=f"请提供正好{months}个图像路径用于逐月预测",
+                data=None,
+            )
 
         # Initialize the current date to the start date
         current_date = start_date
@@ -187,30 +191,26 @@ def create_month_prediction_task(request, data: MonthPredictionIn):
             image_paths, input_times, "MONTHLY", task.id
         )
 
-        return 200, {"task_id": task.id, "celery_id": async_result.id}
+        return StandardResponse(
+            success=True,
+            message="逐月预测任务已创建",
+            data={"task_id": task.id, "celery_id": async_result.id},
+        )
 
     except Exception as e:
         print(e)
-        return 500, {"error": str(e)}
+        return StandardResponse(success=False, message=f"发生错误: {str(e)}", data=None)
 
 
-@api.get(
-    "/predict/month/{task_id}",
-    response={
-        200: PredictionResultResponse,
-        400: ErrorResponse,
-        404: ErrorResponse,
-        500: ErrorResponse,
-    },
-)
+@api.get("/predict/month/{task_id}", response=StandardResponse)
 def get_month_prediction_result(request, task_id: int):
     try:
         task = DownloadPredictTask.objects.get(id=task_id)
 
         if task.status == "IN_PROGRESS":
-            return 400, {"error": "Task is not yet completed"}
+            return StandardResponse(success=False, message="任务尚未完成", data=None)
         elif task.status == "FAILED":
-            return 500, {"error": "Task failed"}
+            return StandardResponse(success=False, message="任务失败", data=None)
 
         # 生成12个月的图片路径和日期信息
         data = []
@@ -224,19 +224,18 @@ def get_month_prediction_result(request, task_id: int):
                 }
             )
 
-        return 200, {"data": data}
+        return StandardResponse(
+            success=True, message="获取逐月预测结果成功", data={"data": data}
+        )
 
     except DownloadPredictTask.DoesNotExist:
-        return 404, {"error": "Task not found"}
+        return StandardResponse(success=False, message="任务未找到", data=None)
     except Exception as e:
         print(e)
-        return 500, {"error": str(e)}
+        return StandardResponse(success=False, message=f"发生错误: {str(e)}", data=None)
 
 
-@api.get(
-    "/predict/day/realtime",
-    response={200: PredictionResultResponse, 404: ErrorResponse, 500: ErrorResponse},
-)
+@api.get("/realtime-predict/day", response=StandardResponse)
 def realtime_day_prediction(request):
     try:
         task = (
@@ -247,7 +246,9 @@ def realtime_day_prediction(request):
             .first()
         )
         if not task:
-            return 404, {"error": "No completed daily prediction task found"}
+            return StandardResponse(
+                success=False, message="未找到已完成的逐日预测任务", data=None
+            )
 
         data = []
         start_date = task.start_date
@@ -260,15 +261,14 @@ def realtime_day_prediction(request):
                 }
             )
 
-        return 200, {"data": data}
+        return StandardResponse(
+            success=True, message="获取实时逐日预测成功", data={"data": data}
+        )
     except Exception as e:
-        return 500, {"error": str(e)}
+        return StandardResponse(success=False, message=f"发生错误: {str(e)}", data=None)
 
 
-@api.get(
-    "/predict/month/realtime",
-    response={200: PredictionResultResponse, 404: ErrorResponse, 500: ErrorResponse},
-)
+@api.get("/realtime-predict/month", response=StandardResponse)
 def realtime_month_prediction(request):
     try:
         task = (
@@ -279,7 +279,9 @@ def realtime_month_prediction(request):
             .first()
         )
         if not task:
-            return 404, {"error": "No completed monthly prediction task found"}
+            return StandardResponse(
+                success=False, message="未找到已完成的逐月预测任务", data=None
+            )
 
         data = []
         start_date = task.start_date
@@ -292,44 +294,55 @@ def realtime_month_prediction(request):
                 }
             )
 
-        return 200, {"data": data}
+        return StandardResponse(
+            success=True, message="获取实时逐月预测成功", data={"data": data}
+        )
     except Exception as e:
-        return 500, {"error": str(e)}
+        return StandardResponse(success=False, message=f"发生错误: {str(e)}", data=None)
 
 
-@api.post("/upload/image", response={200: UploadResponse, 400: ErrorResponse})
+@api.post("/upload/image", response=StandardResponse)
 def upload_image(request, file: UploadedFile = File(...)):
-    if not file:
-        return 400, {"error": "No image file provided"}
+    try:
+        if not file:
+            return StandardResponse(success=False, message="未提供图像文件", data=None)
 
-    if not file.name.lower().endswith(".png"):
-        return 400, {"error": "Invalid image format. Only PNG is allowed."}
+        if not file.name.lower().endswith(".png"):
+            return StandardResponse(
+                success=False, message="无效的图像格式。仅允许PNG格式", data=None
+            )
 
-    # Compute the hash of the file content (using SHA256)
-    file_content = file.read()
-    image_hash = hashlib.sha256(file_content).hexdigest()
+        # Compute the hash of the file content (using SHA256)
+        file_content = file.read()
+        image_hash = hashlib.sha256(file_content).hexdigest()
 
-    # Generate the filename based on the hash
-    unique_filename = f"{image_hash}.png"
+        # Generate the filename based on the hash
+        unique_filename = f"{image_hash}.png"
 
-    # Define the upload path using pathlib
-    upload_path = Path("uploads") / unique_filename
+        # Define the upload path using pathlib
+        upload_path = Path("uploads") / unique_filename
 
-    # Check if file already exists (if it does, we do not need to save it again)
-    if default_storage.exists(str(upload_path)):
-        image_url = Path(settings.MEDIA_ROOT) / upload_path
-        return 200, {"message": "Image already exists", "image_url": str(image_url)}
+        # Check if file already exists (if it does, we do not need to save it again)
+        if default_storage.exists(str(upload_path)):
+            image_url = Path(settings.MEDIA_ROOT) / upload_path
+            return StandardResponse(
+                success=True, message="图像已存在", data={"image_url": str(image_url)}
+            )
 
-    # Save the uploaded file to the specified path
-    saved_path = default_storage.save(str(upload_path), ContentFile(file_content))
+        # Save the uploaded file to the specified path
+        saved_path = default_storage.save(str(upload_path), ContentFile(file_content))
 
-    # Construct the image URL using pathlib
-    image_url = Path(settings.MEDIA_ROOT) / saved_path
+        # Construct the image URL using pathlib
+        image_url = Path(settings.MEDIA_ROOT) / saved_path
 
-    return 200, {"message": "Image uploaded successfully", "image_url": str(image_url)}
+        return StandardResponse(
+            success=True, message="图像上传成功", data={"image_url": str(image_url)}
+        )
+    except Exception as e:
+        return StandardResponse(success=False, message=f"发生错误: {str(e)}", data=None)
 
 
-@api.post("/dynamics/analysis", response={200: TaskResponse, 500: ErrorResponse})
+@api.post("/dynamics/analysis", response=StandardResponse)
 def create_dynamics_analysis(request, data: DynamicsAnalysisIn):
     try:
         start_time = datetime.strptime(data.start_time, "%Y%m")
@@ -352,28 +365,24 @@ def create_dynamics_analysis(request, data: DynamicsAnalysisIn):
             start_time, end_time, int(grad_month), grad_type, task.id
         )
 
-        return 200, {"task_id": task.id, "celery_id": async_result.id}
+        return StandardResponse(
+            success=True,
+            message="动态分析任务已创建",
+            data={"task_id": task.id, "celery_id": async_result.id},
+        )
     except Exception as e:
-        return 500, {"error": str(e)}
+        return StandardResponse(success=False, message=f"发生错误: {str(e)}", data=None)
 
 
-@api.get(
-    "/dynamics/analysis/{task_id}",
-    response={
-        200: PredictionResultResponse,
-        400: ErrorResponse,
-        404: ErrorResponse,
-        500: ErrorResponse,
-    },
-)
+@api.get("/dynamics/analysis/{task_id}", response=StandardResponse)
 def get_dynamics_analysis_result(request, task_id: int):
     try:
         task = DynamicGradTask.objects.get(id=task_id)
 
         if task.status == "IN_PROGRESS":
-            return 400, {"error": "Task is not yet completed"}
+            return StandardResponse(success=False, message="任务尚未完成", data=None)
         elif task.status == "FAILED":
-            return 500, {"error": "Task failed"}
+            return StandardResponse(success=False, message="任务失败", data=None)
 
         data = []
         start_date = task.start_date
@@ -386,9 +395,11 @@ def get_dynamics_analysis_result(request, task_id: int):
                 }
             )
 
-        return 200, {"data": data}
+        return StandardResponse(
+            success=True, message="获取动态分析结果成功", data={"data": data}
+        )
 
     except DynamicGradTask.DoesNotExist:
-        return 404, {"error": "Task not found"}
+        return StandardResponse(success=False, message="任务未找到", data=None)
     except Exception as e:
-        return 500, {"error": str(e)}
+        return StandardResponse(success=False, message=f"发生错误: {str(e)}", data=None)

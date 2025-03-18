@@ -75,6 +75,8 @@ def predict_and_return(input_images_paths, input_times, task_type, task_id):
             with Image.open(path_str) as img:
                 images.append(img.copy())
         except Exception as e:
+            task.status = 'FAILED'
+            task.save()
             raise ValueError(f"Failed to open image {path_str}: {str(e)}")
     task.input_files = input_images_paths
     task.input_times = input_times
