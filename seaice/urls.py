@@ -1,4 +1,5 @@
 from django.urls import path
+from .api import api
 
 from seaice import views
 
@@ -12,4 +13,5 @@ urlpatterns = [
     path('realtime-month-prediction', views.realtime_month_prediction),
     path('dynamics-analysis', views.create_dynamics_analysis),
     path('dynamics-analysis/<int:task_id>', views.get_dynamics_analysis_result),
+    path('api/',api.urls)
 ]
