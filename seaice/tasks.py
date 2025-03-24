@@ -8,11 +8,18 @@ from celery import shared_task
 from dateutil.relativedelta import relativedelta
 
 from sea_ice_backend import settings
-from seaice.common.convert_data_and_generate_image import prediction_result_to_image
+from seaice.common.convert_data_and_generate_image import (
+    prediction_result_to_image,
+    prediction_result_to_pillow_image,
+    save_image,
+    polar_to_rectangular_optimized,
+    overlay_sea_ice,
+)
 from seaice.common.download_and_organize_data import download_and_organize_data
-from seaice.models import DownloadPredictTask, DynamicGradTask
+from seaice.models import DownloadPredictTask, DynamicGradTask, ModelInterpreterTask
 from seaice.osi_450_a import predict as predict_month
-from seaice.osi_450_a.grad import grad_nb
+from seaice.osi_450_a.grad import grad_nb as grad_nb_month
+from seaice.cross_modality.model_interpreter import grad_nb as grad_nb_day
 from seaice.osi_saf import predict
 
 
@@ -23,16 +30,18 @@ def _download_and_save(start_date_str, end_date_str, task_type):
     # 定义数据保存的目录
     output_directory = Path(settings.MEDIA_ROOT) / "downloads"
     # 调用下载并组织数据的函数
-    nc_files = asyncio.run(download_and_organize_data(start_date, end_date, output_directory, task_type))
+    nc_files = asyncio.run(
+        download_and_organize_data(start_date, end_date, output_directory, task_type)
+    )
     input_times = []
-    if task_type == 'DAILY':
+    if task_type == "DAILY":
         # 生成输入时间列表
         current_date = start_date
         while current_date <= end_date:
             input_times.append(int(current_date.strftime("%Y%m%d")))
             current_date = current_date + datetime.timedelta(days=1)
 
-    elif task_type == 'MONTHLY':
+    elif task_type == "MONTHLY":
         # 生成输入时间列表
         current_date = start_date
         while current_date <= end_date:
@@ -49,11 +58,12 @@ def _download_and_save(start_date_str, end_date_str, task_type):
 
 def _predict_and_save(input_files, input_times, task_type):
     # 调用预测函数
-    if task_type == 'DAILY':
+    if task_type == "DAILY":
         predictions = predict.predict_ice_concentration_from_nc_files(input_files)
-    elif task_type == 'MONTHLY':
-        predictions = predict_month.predict_ice_concentration_from_nc_files(input_files,
-                                                                            [int(time % 100) for time in input_times])
+    elif task_type == "MONTHLY":
+        predictions = predict_month.predict_ice_concentration_from_nc_files(
+            input_files, [int(time % 100) for time in input_times]
+        )
     else:
         raise ValueError("task_type must be either 'DAILY' or 'MONTHLY'")
     # Save predictions as images and generate URLs
@@ -75,18 +85,20 @@ def predict_and_return(input_images_paths, input_times, task_type, task_id):
             with Image.open(path_str) as img:
                 images.append(img.copy())
         except Exception as e:
-            task.status = 'FAILED'
+            task.status = "FAILED"
             task.save()
             raise ValueError(f"Failed to open image {path_str}: {str(e)}")
     task.input_files = input_images_paths
     task.input_times = input_times
 
-    if task_type == 'DAILY':
+    if task_type == "DAILY":
         predictions = predict.predict_ice_concentration_from_images(images)
-    elif task_type == 'MONTHLY':
-        predictions = predict_month.predict_ice_concentration_from_images(images, input_times)
+    elif task_type == "MONTHLY":
+        predictions = predict_month.predict_ice_concentration_from_images(
+            images, input_times
+        )
     else:
-        task.status = 'FAILED'
+        task.status = "FAILED"
         task.save()
         raise ValueError("task_type must be either 'DAILY' or 'MONTHLY'")
     urls = []
@@ -94,22 +106,82 @@ def predict_and_return(input_images_paths, input_times, task_type, task_id):
         file_url = prediction_result_to_image(prediction[0])
         urls.append(file_url)
     task.result_urls = urls
-    task.status = 'COMPLETED'
+    task.status = "COMPLETED"
     task.save()
-    return json.dumps({
-        'input_files': task.input_files,
-        'input_times': task.input_times,
-        'result_urls': task.result_urls,
-        'task_id': task.id,
-        'status': task.status
-    })
+    return json.dumps(
+        {
+            "input_files": task.input_files,
+            "input_times": task.input_times,
+            "result_urls": task.result_urls,
+            "task_id": task.id,
+            "status": task.status,
+        }
+    )
 
 
 @shared_task
-def grad_and_return(start_time: datetime.datetime, end_time: datetime.datetime, grad_month: int, grad_type: str,
-                    task_id: int):
+def predict_and_return_globe(input_images_paths, input_times, task_type, task_id):
+    task = DownloadPredictTask.objects.get(id=task_id)
+    # Open images from local paths
+    images = []
+    error = ""
+    for path_str in input_images_paths:
+        try:
+            with Image.open(path_str) as img:
+                images.append(img.copy())
+        except Exception as e:
+            task.status = "FAILED"
+            task.save()
+            raise ValueError(f"Failed to open image {path_str}: {str(e)}")
+    task.input_files = input_images_paths
+    task.input_times = input_times
+    try:
+        if task_type == "DAILY":
+            predictions = predict.predict_ice_concentration_from_images(images)
+        elif task_type == "MONTHLY":
+            predictions = predict_month.predict_ice_concentration_from_images(
+                images, input_times
+            )
+        else:
+            task.status = "FAILED"
+            task.save()
+            raise ValueError("task_type must be either 'DAILY' or 'MONTHLY'")
+        urls = []
+        for prediction in predictions:
+            image = prediction_result_to_pillow_image(prediction[0])
+            image = polar_to_rectangular_optimized(image)
+            image = overlay_sea_ice(image)
+            file_url = save_image(image)
+            urls.append(file_url)
+        task.result_urls = urls
+        task.status = "COMPLETED"
+    except Exception as e:
+        task.status = f"FAILED"
+        error = e
+    finally:
+        task.save()
+    return json.dumps(
+        {
+            "input_files": task.input_files,
+            "input_times": task.input_times,
+            "result_urls": task.result_urls,
+            "task_id": task.id,
+            "status": task.status,
+            "error": str(error),
+        }
+    )
+
+
+@shared_task
+def grad_and_return(
+    start_time: datetime.datetime,
+    end_time: datetime.datetime,
+    grad_month: int,
+    grad_type: str,
+    task_id: int,
+):
     task = DynamicGradTask.objects.get(id=task_id)
-    error = ''
+    error = ""
     task.start_date = start_time
     task.end_date = end_time
     task.grad_month = grad_month
@@ -119,37 +191,80 @@ def grad_and_return(start_time: datetime.datetime, end_time: datetime.datetime, 
     end_time = int(end_time.strftime("%Y%m"))
 
     try:
-        result_urls = grad_nb(start_time, end_time, grad_month,
-                              grad_type)
+        result_urls = grad_nb_month(start_time, end_time, grad_month, grad_type)
         task.result_urls = result_urls
-        task.status = 'COMPLETED'
+        task.status = "COMPLETED"
     except Exception as e:
-        task.status = 'FAILED'
+        task.status = "FAILED"
         error = e
     finally:
         task.save()
 
-    return json.dumps({
-        'start_time': task.start_date.strftime("%Y%m"),
-        'end_time': task.end_date.strftime("%Y%m"),
-        'grad_month': task.grad_month,
-        'grad_type': task.grad_type,
-        'result_urls': task.result_urls,
-        'task_id': task.id,
-        'status': task.status,
-        'error': str(error)
-    })
+    return json.dumps(
+        {
+            "start_time": task.start_date.strftime("%Y%m"),
+            "end_time": task.end_date.strftime("%Y%m"),
+            "grad_month": task.grad_month,
+            "grad_type": task.grad_type,
+            "result_urls": task.result_urls,
+            "task_id": task.id,
+            "status": task.status,
+            "error": str(error),
+        }
+    )
 
 
 @shared_task
-def download_predict_and_save(task_type='DAILY'):
-    if task_type == 'DAILY':
+def grad_day_and_return(
+    start_time: datetime.datetime,
+    end_time: datetime.datetime,
+    grad_day: int,
+    grad_type: str,
+    task_id: int,
+):
+    task = ModelInterpreterTask.objects.get(id=task_id)
+    error = ""
+    task.start_date = start_time
+    task.end_date = end_time
+    task.grad_day = grad_day
+    task.grad_type = grad_type
+
+    start_time = int(start_time.strftime("%Y%m%d"))
+    end_time = int(end_time.strftime("%Y%m%d"))
+
+    try:
+        result_urls = grad_nb_day(start_time, end_time, grad_day, grad_type)
+        task.result_urls = result_urls
+        task.status = "COMPLETED"
+    except Exception as e:
+        task.status = "FAILED"
+        error = e
+    finally:
+        task.save()
+
+    return json.dumps(
+        {
+            "start_time": task.start_date.strftime("%Y%m%d"),
+            "end_time": task.end_date.strftime("%Y%m%d"),
+            "grad_day": task.grad_day,
+            "grad_type": task.grad_type,
+            "result_urls": task.result_urls,
+            "task_id": task.id,
+            "status": task.status,
+            "error": str(error),
+        }
+    )
+
+
+@shared_task
+def download_predict_and_save(task_type="DAILY"):
+    if task_type == "DAILY":
         # 获取当前日期的前一天作为结束日期
         end_date = datetime.date.today() - relativedelta(days=2)
 
         # 开始日期是结束日期的13天之前
         start_date = end_date - relativedelta(days=13)
-    elif task_type == 'MONTHLY':
+    elif task_type == "MONTHLY":
         # 获取当前日期的前一天作为结束日期
         end_date = datetime.date.today() - relativedelta(months=1)
         end_date.replace(day=1)
@@ -161,37 +276,43 @@ def download_predict_and_save(task_type='DAILY'):
         raise ValueError("task_type must be either 'DAILY' or 'MONTHLY'")
     start_date_str = start_date.strftime("%Y%m%d")
     end_date_str = end_date.strftime("%Y%m%d")
-    error = ''
+    error = ""
 
     # 创建数据库任务记录
     task = DownloadPredictTask.objects.create(
         start_date=start_date,
         end_date=end_date,
         task_type=task_type,
-        source='SCHEDULED',
-        status='IN_PROGRESS'
+        source="SCHEDULED",
+        status="IN_PROGRESS",
     )
     try:
         # 调用下载、预测和保存函数
-        task.input_files, task.input_times = _download_and_save(start_date_str, end_date_str, task_type)
-        task.result_urls = _predict_and_save(task.input_files, task.input_times, task_type)
-        task.status = 'COMPLETED'
+        task.input_files, task.input_times = _download_and_save(
+            start_date_str, end_date_str, task_type
+        )
+        task.result_urls = _predict_and_save(
+            task.input_files, task.input_times, task_type
+        )
+        task.status = "COMPLETED"
     except Exception as e:
-        task.status = 'FAILED'
+        task.status = "FAILED"
         error = e
     finally:
         task.save()
 
-    return json.dumps({
-        'start_date': start_date_str,
-        'end_date': end_date_str,
-        'input_files': task.input_files,
-        'input_times': task.input_times,
-        'result_urls': task.result_urls,
-        'task_id': task.id,
-        'status': task.status,
-        'error': str(error)
-    })
+    return json.dumps(
+        {
+            "start_date": start_date_str,
+            "end_date": end_date_str,
+            "input_files": task.input_files,
+            "input_times": task.input_times,
+            "result_urls": task.result_urls,
+            "task_id": task.id,
+            "status": task.status,
+            "error": str(error),
+        }
+    )
 
 
 if __name__ == "__main__":

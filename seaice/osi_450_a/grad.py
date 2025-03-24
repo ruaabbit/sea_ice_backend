@@ -116,9 +116,8 @@ def grad_nb(start_time: int, end_time: int, grad_month: int, grad_type: str):
     def percentage(x, pos):
         return f"{x:.0%}"
 
-    def plot_sic1(sic, cmap, save_path):
+    def plot_sic1(sic, cmap):
         result_urls = []
-        os.makedirs(save_path, exist_ok=True)
         # 绘制海冰浓度图
         start_time_str = str(start_time)
         month = int(start_time_str[4:6])
@@ -151,7 +150,9 @@ def grad_nb(start_time: int, end_time: int, grad_month: int, grad_type: str):
                 plt.savefig(buffer, bbox_inches="tight")
                 plt.close()
                 if not default_storage.exists(str(file_path)):
-                    file_path = default_storage.save(str(file_path), ContentFile(buffer.getvalue()))
+                    file_path = default_storage.save(
+                        str(file_path), ContentFile(buffer.getvalue())
+                    )
                 result_urls.append(default_storage.url(file_path))
         return result_urls
 
@@ -159,12 +160,6 @@ def grad_nb(start_time: int, end_time: int, grad_month: int, grad_type: str):
     colors = [(0, "white"), (1, "#D50103")]  # 定义颜色映射
     cmap_ice_conc1 = LinearSegmentedColormap.from_list("cmap_ice_conc", colors)
 
-    save_path = f"analysis_result1/grad/{grad_type}/month{grad_month}"
-    result_urls = plot_sic1(grad_month_np, cmap_ice_conc1, save_path)
+    result_urls = plot_sic1(grad_month_np, cmap_ice_conc1)
     torch.cuda.empty_cache()
     return result_urls
-
-
-if __name__ == '__main__':
-    tmp = grad_nb(202204, 202303, 12, 'sum')
-    print(tmp)

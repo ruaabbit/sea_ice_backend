@@ -13,7 +13,7 @@ from ninja.files import UploadedFile
 
 from sea_ice_backend import settings
 from seaice.models import DownloadPredictTask, DynamicGradTask
-from seaice.tasks import predict_and_return, grad_and_return
+from seaice.tasks import predict_and_return, grad_and_return, predict_and_return_globe
 
 
 api = NinjaAPI(
@@ -103,7 +103,7 @@ def create_day_prediction_task(request, data: DayPredictionIn):
         # 保存任务ID
         task.save()
         # 异步调用 Celery 任务
-        async_result = predict_and_return.delay(image_paths, [], "DAILY", task.id)
+        async_result = predict_and_return_globe.delay(image_paths, [], "DAILY", task.id)
 
         return StandardResponse(
             success=True,
@@ -127,11 +127,11 @@ def get_day_prediction_result(request, task_id: int):
             return StandardResponse(success=False, message="任务失败", data=None)
 
         # 生成14天的图片路径和日期信息
-        data = []
+        images = []
         start_date = task.start_date
         for i, url in enumerate(task.result_urls):
             current_date = start_date + relativedelta.relativedelta(days=i + 1)
-            data.append(
+            images.append(
                 {
                     "path": settings.HOST_PREFIX + url,
                     "date": current_date.strftime("%Y-%m-%d"),
@@ -139,7 +139,7 @@ def get_day_prediction_result(request, task_id: int):
             )
 
         return StandardResponse(
-            success=True, message="获取逐日预测结果成功", data={"data": data}
+            success=True, message="获取逐日预测结果成功", data={"images": images}
         )
 
     except DownloadPredictTask.DoesNotExist:
@@ -187,7 +187,7 @@ def create_month_prediction_task(request, data: MonthPredictionIn):
         # 保存任务ID
         task.save()
         # 异步调用 Celery 任务
-        async_result = predict_and_return.delay(
+        async_result = predict_and_return_globe.delay(
             image_paths, input_times, "MONTHLY", task.id
         )
 
@@ -213,11 +213,11 @@ def get_month_prediction_result(request, task_id: int):
             return StandardResponse(success=False, message="任务失败", data=None)
 
         # 生成12个月的图片路径和日期信息
-        data = []
+        images = []
         start_date = task.start_date
         for i, url in enumerate(task.result_urls):
             current_date = start_date + relativedelta.relativedelta(months=i + 1)
-            data.append(
+            images.append(
                 {
                     "path": settings.HOST_PREFIX + url,
                     "date": current_date.strftime("%Y-%m"),
@@ -225,7 +225,7 @@ def get_month_prediction_result(request, task_id: int):
             )
 
         return StandardResponse(
-            success=True, message="获取逐月预测结果成功", data={"data": data}
+            success=True, message="获取逐月预测结果成功", data={"images": images}
         )
 
     except DownloadPredictTask.DoesNotExist:
@@ -250,11 +250,11 @@ def realtime_day_prediction(request):
                 success=False, message="未找到已完成的逐日预测任务", data=None
             )
 
-        data = []
+        images = []
         start_date = task.start_date
         for i, url in enumerate(task.result_urls):
             current_date = start_date + relativedelta.relativedelta(days=i + 14)
-            data.append(
+            images.append(
                 {
                     "path": settings.HOST_PREFIX + url,
                     "date": current_date.strftime("%Y-%m-%d"),
@@ -262,7 +262,7 @@ def realtime_day_prediction(request):
             )
 
         return StandardResponse(
-            success=True, message="获取实时逐日预测成功", data={"data": data}
+            success=True, message="获取实时逐日预测成功", data={"images": images}
         )
     except Exception as e:
         return StandardResponse(success=False, message=f"发生错误: {str(e)}", data=None)
@@ -283,11 +283,11 @@ def realtime_month_prediction(request):
                 success=False, message="未找到已完成的逐月预测任务", data=None
             )
 
-        data = []
+        images = []
         start_date = task.start_date
         for i, url in enumerate(task.result_urls):
             current_date = start_date + relativedelta.relativedelta(months=i + 12)
-            data.append(
+            images.append(
                 {
                     "path": settings.HOST_PREFIX + url,
                     "date": current_date.strftime("%Y-%m"),
@@ -295,7 +295,7 @@ def realtime_month_prediction(request):
             )
 
         return StandardResponse(
-            success=True, message="获取实时逐月预测成功", data={"data": data}
+            success=True, message="获取实时逐月预测成功", data={"images": images}
         )
     except Exception as e:
         return StandardResponse(success=False, message=f"发生错误: {str(e)}", data=None)
@@ -367,7 +367,7 @@ def create_dynamics_analysis(request, data: DynamicsAnalysisIn):
 
         return StandardResponse(
             success=True,
-            message="动态分析任务已创建",
+            message="动力学分析任务已创建",
             data={"task_id": task.id, "celery_id": async_result.id},
         )
     except Exception as e:
@@ -384,11 +384,11 @@ def get_dynamics_analysis_result(request, task_id: int):
         elif task.status == "FAILED":
             return StandardResponse(success=False, message="任务失败", data=None)
 
-        data = []
+        images = []
         start_date = task.start_date
         for i, url in enumerate(task.result_urls):
             current_date = start_date + relativedelta.relativedelta(months=i)
-            data.append(
+            images.append(
                 {
                     "path": settings.HOST_PREFIX + url,
                     "date": current_date.strftime("%m") + "月",
@@ -396,7 +396,7 @@ def get_dynamics_analysis_result(request, task_id: int):
             )
 
         return StandardResponse(
-            success=True, message="获取动态分析结果成功", data={"data": data}
+            success=True, message="获取动力学分析结果成功", data={"images": images}
         )
 
     except DynamicGradTask.DoesNotExist:
