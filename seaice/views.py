@@ -293,6 +293,10 @@ def create_dynamics_analysis(request):
         end_time = datetime.strptime(end_time_str, "%Y%m")
         grad_month = data.get("grad_month")
         grad_type = data.get("grad_type")
+        x1 = 0 if data.get("x1", 0) == None else data.get("x1", 0)
+        y1 = 0 if data.get("y1", 0) == None else data.get("y1", 0)
+        x2 = 432 if data.get("x2", 432) == None else data.get("x2", 432)
+        y2 = 432 if data.get("y2", 432) == None else data.get("y2", 432)
 
         # 创建数据库任务记录
         task = DynamicGradTask.objects.create(
@@ -300,13 +304,17 @@ def create_dynamics_analysis(request):
             end_date=end_time,
             grad_month=grad_month,
             grad_type=grad_type,
+            x1=x1,
+            y1=y1,
+            x2=x2,
+            y2=y2,
             status="IN_PROGRESS",
         )
         # 保存任务ID
         task.save()
 
         async_result = grad_and_return.delay(
-            start_time, end_time, int(grad_month), grad_type, task.id
+            start_time, end_time, int(grad_month), grad_type, x1, y1, x2, y2, task.id
         )
 
         return JsonResponse(

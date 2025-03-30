@@ -23,14 +23,18 @@ def calculate_daily_gradients(model, dataloader, device, target_day=0, grad_type
         # 前向传播
         pred = model(inputs, inputs_mark, targets_mark)
 
-        # 提取目标日的预测
-        daily_pred = pred[:, target_day, 0, :, :]  # [batch, H, W]
+        # 提取目标日的预测和对应输入时间步
+        daily_pred = pred[:, target_day, :, :, :]  # [batch, H, W]
+        input_slice = inputs[:, target_day, :, :, :]  # 假设输入与预测时间步对齐
 
-        # 梯度计算逻辑
+        # 计算输入与预测的差异
+        diff = input_slice - daily_pred
+
+        # 梯度计算逻辑（基于差异和掩码）
         if grad_type == "sum":
-            loss = torch.sum(daily_pred * mask)
+            loss = torch.sum(torch.abs(diff) * mask)
         else:  # L2范数
-            loss = torch.sqrt(torch.sum((daily_pred * mask) ** 2))
+            loss = torch.sqrt(torch.sum((diff * mask) ** 2))
 
         # 反向传播
         loss.backward()

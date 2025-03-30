@@ -60,18 +60,19 @@ WSGI_APPLICATION = "sea_ice_backend.wsgi.application"
 
 DATABASES = {
     "default": {
-        # SQLite
-        # 'ENGINE': 'django.db.backends.sqlite3',
-        # 'NAME': BASE_DIR / 'db.sqlite3',
-        # MariaDB
-        "ENGINE": "django.db.backends.mysql",
+        "ENGINE": "dj_db_conn_pool.backends.mysql",
         "NAME": os.getenv("DJANGO_DB_NAME", "seaice"),
         "USER": os.getenv("DJANGO_DB_USER", "root"),
         "PASSWORD": os.getenv("DJANGO_DB_PASSWORD", "liuZHAO65266450"),
         "HOST": os.getenv("DJANGO_DB_HOST", "localhost"),
         "PORT": os.getenv("DJANGO_DB_PORT", "3306"),
-        "CONN_MAX_AGE": 600,
-        "CONN_HEALTH_CHECKS": True,
+        "POOL_OPTIONS": {
+            "POOL_SIZE": 5,
+            "MAX_OVERFLOW": 10,
+            "RECYCLE": 3600,
+            "PRE_PING": True,
+            "ECHO": False
+        }
     }
 }
 
@@ -129,6 +130,7 @@ CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_RESULT_BACKEND = "django-db"
 CELERY_TASK_SERIALIZER = "json"
 CELERY_WORKER_POOL = "solo"
+CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
 
 # Django Celery Beat
 

@@ -2,13 +2,16 @@ import datetime
 import io
 import random
 from pathlib import Path
+
+import cartopy.crs as ccrs
+import cartopy.feature as cfeature
+import matplotlib.pyplot as plt
 import numpy as np
+import numpy.ma as ma
 from PIL import Image
-import math
-import concurrent.futures
-import cv2
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
+from matplotlib.colors import LinearSegmentedColormap
 
 # 全局常量
 LAND_MASK_DATA = np.load("seaice/common/data/land_mask.npy")
@@ -57,230 +60,142 @@ def prediction_result_to_image(prediction_result: np.ndarray):
     return default_storage.url(file_path)
 
 
-def save_image(image: Image):
-    """
-    保存PIL图像对象到文件并返回文件路径
-    """
-    # 生成随机文件名
-    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-    file_name = f"image_{timestamp}_{random.randint(10000, 99999)}.png"
-    file_path = Path("images") / file_name
-
-    # 保存文件
-    if not default_storage.exists(str(file_path)):
-        file_path = default_storage.save(str(file_path), ContentFile(image.tobytes()))
-
-    return default_storage.url(file_path)
-
-
-def prediction_result_to_pillow_image(prediction_result: np.ndarray):
-    """
-    将预测结果转换为PIL图像对象
-    """
-    # 数据预处理部分相同...
-    data = np.clip(prediction_result, 0, 1)
-    rgb_image = np.zeros((432, 432, 3), dtype=np.float32)
-    ice_mask = WATER_MASK & (data > 0)
-    rgb_image[WATER_MASK & (data == 0)] = WATER_COLOR
-    rgb_image[LAND_MASK] = LAND_COLOR
-
-    if np.any(ice_mask):
-        ice_colors = ICE_COLOR_BASE + data[ice_mask, np.newaxis] * ICE_COLOR_RANGE
-        rgb_image[ice_mask] = ice_colors
-
-    # 转换为PIL图像并直接保存
-    rgb_image = (rgb_image * 255).astype(np.uint8)
-    image = Image.fromarray(rgb_image)
-
-    return image.copy()
-
-
-def polar_to_rectangular_optimized(
-    polar_image,
-    width=5400,
-    height=1550,
-    start_angle=math.pi / 2,
-    mirror=True,
-    num_threads=4,
-    upscale_factor=1,
-):
-    """
-    将极地投影图转换为长方形投影图（多线程优化版本，带超分辨率处理）
+def create_ice_colormap(cmap_style="default", alpha=1.0, n_colors=256):
+    """创建渐变色映射，用于表示海冰浓度
 
     参数:
-    polar_image_path: 极地投影图路径
-    width: 输出图像宽度
-    height: 输出图像高度
-    start_angle: 开始分割的角度（弧度），0表示正上方，np.pi表示正下方
-    mirror: 是否左右镜像输出图像
-    num_threads: 线程数量
-    upscale_factor: 超分辨率倍数
+        cmap_style: 颜色映射样式 ('default', 'blue_white_red', 'rainbow', 'ice')
+        alpha: 透明度 (0.0-1.0)
+        n_colors: 颜色分级数量
 
     返回:
-    PIL.Image: 转换后的矩形投影图像
+        matplotlib颜色映射对象
     """
-    # 读取极地投影图
-    polar_img = polar_image.convert("RGBA")  # 确保有alpha通道
+    # 不同的预设颜色方案
+    if cmap_style == "default":
+        # 原始的深蓝到红色渐变
+        ocean_color = "#0077be"  # 深蓝色
+        colors = [ocean_color, "red"]
 
-    # 获取原始极地图像尺寸
-    original_polar_width, original_polar_height = polar_img.size
+    elif cmap_style == "blue_white_red":
+        # 蓝-白-红渐变，更好地反映冷热变化
+        colors = ["#0077be", "#ffffff", "#ff0000"]
 
-    # 将图像转换为numpy数组
-    polar_img_np = np.array(polar_img)
+    elif cmap_style == "rainbow":
+        # 从蓝色到红色的完整光谱
+        colors = ["#0077be", "#00bfff", "#00ffff", "#bfff00", "#ffbf00", "#ff0000"]
 
-    # 定义需要去除的颜色
-    colors_to_remove = [(210, 180, 140), (4, 98, 154), (0, 0, 0)]
+    elif cmap_style == "ice":
+        # 专为海冰设计的渐变，蓝色表示海洋，浅蓝表示新冰，白色表示厚冰
+        colors = [
+            "#0077be",  # 深蓝 (海洋)
+            "#00a5db",  # 浅蓝 (低浓度)
+            "#b1e4ff",  # 淡蓝 (中低浓度)
+            "#e1f2fe",  # 非常浅的蓝 (中等浓度)
+            "#ffffff",  # 白色 (高浓度)
+        ]
+    else:
+        # 默认使用原始方案
+        ocean_color = "#0077be"
+        colors = [ocean_color, "red"]
 
-    # 创建掩码，初始化为全False
-    mask = np.zeros(polar_img_np.shape[:2], dtype=bool)
+    # 创建颜色映射
+    cmap = LinearSegmentedColormap.from_list("ice_cmap", colors, N=n_colors)
 
-    # 对每种需要去除的颜色，更新掩码
-    for color in colors_to_remove:
-        # 检查RGB通道是否匹配指定颜色
-        color_mask = np.all(polar_img_np[:, :, :3] == color, axis=2)
-        mask = mask | color_mask
+    # 如果需要透明度，创建带alpha通道的版本
+    if alpha < 1.0:
+        # 获取原始颜色表
+        cmap_colors = cmap(np.linspace(0, 1, n_colors))
+        # 设置alpha通道
+        cmap_colors[:, 3] = alpha
+        # 用修改后的颜色创建新颜色映射
+        cmap = LinearSegmentedColormap.from_list(
+            f"ice_cmap_alpha{alpha}", cmap_colors, N=n_colors
+        )
 
-    # 将匹配的像素点的alpha通道设置为0（完全透明）
-    polar_img_np[mask, 3] = 0
-    # 将图像最外围10个像素设为透明
-    border_width = 20
-    # 上边框
-    polar_img_np[:border_width, :, 3] = 0
-    # 下边框
-    polar_img_np[-border_width:, :, 3] = 0
-    # 左边框
-    polar_img_np[:, :border_width, 3] = 0
-    # 右边框
-    polar_img_np[:, -border_width:, 3] = 0
+    return cmap
 
-    # 分离通道进行处理
-    r_channel, g_channel, b_channel, a_channel = cv2.split(polar_img_np)
 
-    # 对RGB通道应用EDSR超分辨率模型（OpenCV的超分辨率实现）
-    sr = cv2.dnn_superres.DnnSuperResImpl_create()
+def prediction_result_to_globe_image(prediction_result: np.ndarray):
+    """
+    Convert prediction result to a globe-projected image using Cartopy.
+    Returns the URL of the saved image.
+    """
+    lat = np.load("seaice/common/data/lat.npy")
+    lon = np.load("seaice/common/data/lon.npy")
+    lat_mask = np.isnan(lat)
+    lon_mask = np.isnan(lon)
+    lat = ma.masked_array(lat, mask=lat_mask)
+    lon = ma.masked_array(lon, mask=lon_mask)
 
-    # 备用方法：使用Lanczos插值（高质量）
-    polar_img_upscaled = cv2.resize(
-        polar_img_np,
-        (
-            original_polar_width * upscale_factor,
-            original_polar_height * upscale_factor,
-        ),
-        interpolation=cv2.INTER_LANCZOS4,
+    ice_conc_mask = prediction_result == 0
+    ice_conc = ma.masked_array(prediction_result, mask=ice_conc_mask)
+    fig = plt.figure(figsize=(10, 5), facecolor="w")
+
+    # 使用等距离圆柱投影
+    ax = plt.axes(projection=ccrs.PlateCarree(central_longitude=90))
+
+    # 完全隐藏所有边框和轴
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.spines["bottom"].set_visible(False)
+    ax.spines["left"].set_visible(False)
+    ax.set_axis_off()  # 完全隐藏坐标轴
+
+    # 设置全球视图
+    ax.set_global()
+
+    ocean_color = "#0077be"
+    ax.add_feature(cfeature.OCEAN, color=ocean_color, zorder=0)
+
+    # 创建海冰颜色映射
+    ice_cmap = create_ice_colormap(cmap_style="ice", n_colors=256)
+
+    # --- 修改：简化掩码逻辑 ---
+    # 准备用于 pcolormesh 的数据
+    plot_data = ice_conc
+
+    # --- 绘图顺序和方法 ---
+    # 1. 绘制海冰和海洋
+    im = ax.pcolormesh(
+        lon,
+        lat,
+        plot_data,
+        transform=ccrs.PlateCarree(),
+        cmap=ice_cmap,
+        vmin=0,
+        vmax=1,
+        zorder=1,
+        shading="auto",
     )
 
-    # 将超分辨率处理后的图像转回PIL格式
-    polar_img = Image.fromarray(polar_img_upscaled)
+    # 2. 绘制陆地
+    ax.add_feature(cfeature.LAND, color="#c0c0c0", zorder=2)  # 灰色陆地
 
-    # 获取超分辨率后的极地图像尺寸
-    polar_width, polar_height = polar_img.size
-    polar_center_x = polar_width // 2
-    polar_center_y = polar_height // 2
+    # 3. 绘制海岸线
+    ax.add_feature(cfeature.COASTLINE, linewidth=0.5, zorder=3, color="black")
 
-    # 创建新的长方形图像
-    rect_img = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    # 设置图形边界紧凑
+    fig.tight_layout(pad=0)
 
-    # 计算极地图像的最大半径（从中心到角落）
-    max_radius = min(polar_center_x, polar_center_y)
+    # 保存图像
+    with io.BytesIO() as buffer:
+        plt.savefig(
+            buffer,
+            dpi=300,
+            bbox_inches="tight",
+            pad_inches=0,
+            facecolor="w",
+            edgecolor="w",
+            transparent=False,
+        )
+        plt.close()
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+        file_name = f"predict_globe_{timestamp}_{random.randint(10000, 99999)}.png"
+        file_path = Path("predicts") / file_name
 
-    # 将极坐标图像转换为numpy数组以便更快访问
-    polar_array = np.array(polar_img)
+        if not default_storage.exists(str(file_path)):
+            file_path = default_storage.save(
+                str(file_path), ContentFile(buffer.getvalue()))
 
-    # 创建输出图像的numpy数组
-    rect_array = np.zeros((height, width, 4), dtype=np.uint8)
-
-    def process_row(y):
-        """处理单行像素的函数"""
-        row_data = np.zeros((width, 4), dtype=np.uint8)
-
-        # 将y坐标映射到纬度（90°在顶部，-90°在底部）
-        latitude = 90 - (y / height * 180)
-
-        # 计算从北极点的距离（以像素为单位）
-        r = max_radius * (90 - latitude) / 90
-
-        for x in range(width):
-            # 如果需要镜像，反转x坐标的映射
-            x_map = width - 1 - x if mirror else x
-
-            # 将x坐标映射到经度（-180°到180°）
-            longitude = (x_map / width * 360) - 180
-
-            # 将经度转换为极坐标中的角度（弧度），考虑起始角度
-            theta = np.radians(longitude) + start_angle
-
-            # 计算在极地图像中的坐标
-            polar_x = int(polar_center_x + r * np.cos(theta))
-            polar_y = int(polar_center_y + r * np.sin(theta))
-
-            # 检查坐标是否在极地图像范围内
-            if 0 <= polar_x < polar_width and 0 <= polar_y < polar_height:
-                row_data[x] = polar_array[polar_y, polar_x]
-
-        return y, row_data
-
-    # 使用线程池并行处理每一行
-    with concurrent.futures.ThreadPoolExecutor(max_workers=num_threads) as executor:
-        # 提交所有行的处理任务
-        future_to_row = {executor.submit(process_row, y): y for y in range(height)}
-
-        # 收集结果并填充到输出数组
-        for future in concurrent.futures.as_completed(future_to_row):
-            y, row_data = future.result()
-            rect_array[y] = row_data
-
-    # 从numpy数组创建PIL图像
-    rect_img = Image.fromarray(rect_array)
-
-    # 直接返回生成的图像对象
-    return rect_img.copy()
-
-
-def overlay_sea_ice(base_img, white_threshold=150):
-    """
-    将海冰图片中的白色区域覆盖到基底图片上
-
-    参数:
-    base_img: 基底图片（PIL.Image对象）
-    white_threshold: 判断为白色的阈值（0-255），默认为150
-
-    返回:
-    PIL.Image: 合成后的图像
-    """
-    # 确保图像是RGBA模式
-    base_img = base_img.convert("RGBA")
-    sea_ice_img = Image.open("seaice/common/data/world.topo.bathy.200401.jpg")
-    sea_ice_img = sea_ice_img.convert("RGBA")
-
-    # 获取两张图片的尺寸
-    base_width, base_height = base_img.size
-    sea_ice_width, sea_ice_height = sea_ice_img.size
-
-    # 创建结果图像，初始为基底图片的副本
-    result_img = base_img.copy()
-    result_pixels = result_img.load()
-    sea_ice_pixels = sea_ice_img.load()
-
-    # 计算海冰图片应该放置的位置（居中）
-    start_x = 0
-    start_y = 0
-
-    # 遍历海冰图片的每个像素
-    for y in range(sea_ice_height):
-        for x in range(sea_ice_width):
-            # 计算在基底图片中的对应位置
-            base_x = start_x + x
-            base_y = start_y + y
-
-            # 确保位置在基底图片范围内
-            if 0 <= base_x < base_width and 0 <= base_y < base_height:
-                # 获取海冰图片中的像素
-                r, g, b, a = sea_ice_pixels[x, y]
-                if a > 125:
-                    result_pixels[base_x, base_y] = (r, g, b, a)
-
-    # 转换为RGB模式
-    result_img = result_img.convert("RGB")
-
-    # 直接返回处理后的图像对象
-    return result_img.copy()
+    return default_storage.url(file_path)
