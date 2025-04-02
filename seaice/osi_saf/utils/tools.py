@@ -277,7 +277,6 @@ def nc_to_png(nc_file_path, png_file_path, variable_name='ice_conc'):
     sea_ice_data = np.squeeze(sea_ice_data)  # 去掉单通道维度
     sea_ice_data = np.where(sea_ice_data == -32767, 0, sea_ice_data)
 
-
     sea_ice_data = sea_ice_data / 100
 
     # 创建图像并设置精确的DPI

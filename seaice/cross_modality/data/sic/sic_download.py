@@ -1,12 +1,13 @@
 """ Download and organize sea ice concentration data from NSIDC"""
 
 import os
-from datetime import datetime, timedelta
-import requests
-import shutil
 import re
-from concurrent.futures import ThreadPoolExecutor, as_completed
+import shutil
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime, timedelta
+
+import requests
 
 
 def download_file(file_url, output_file, retries=3, delay=5):

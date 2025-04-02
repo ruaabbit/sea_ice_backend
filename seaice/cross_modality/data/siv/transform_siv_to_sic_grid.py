@@ -68,9 +68,9 @@ for siv_file in tqdm(siv_files, desc="Processing SIV files"):  # 添加进度条
 
         # 遍历每一天的数据
         for i in tqdm(
-            range(var_data.shape[0]),
-            desc=f"Processing days in {os.path.basename(siv_file)} for {var_name}",
-            leave=False,
+                range(var_data.shape[0]),
+                desc=f"Processing days in {os.path.basename(siv_file)} for {var_name}",
+                leave=False,
         ):  # 添加进度条
             # 获取当前日期的变量值
             var_day = var_data[i]

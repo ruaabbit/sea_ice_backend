@@ -69,10 +69,8 @@ DATABASES = {
         "POOL_OPTIONS": {
             "POOL_SIZE": 5,
             "MAX_OVERFLOW": 10,
-            "RECYCLE": 3600,
-            "PRE_PING": True,
-            "ECHO": False
-        }
+            "RECYCLE": 60 * 60,
+        },
     }
 }
 

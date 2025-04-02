@@ -14,7 +14,7 @@ from seaice.models import DownloadPredictTask, DynamicGradTask, ModelInterpreter
 from seaice.tasks import (
     grad_and_return,
     grad_day_and_return,
-    predict_and_return_globe,
+    predict_and_return
 )
 
 api = NinjaAPI(
@@ -28,6 +28,7 @@ api = NinjaAPI(
 class StandardResponse(Schema):
     success: bool
     message: str
+    status: str = "COMPLETED"  # 默认值
     data: Optional[Dict] = None
 
 
@@ -101,7 +102,6 @@ def upload_image(request, file: UploadedFile = File(...)):
         return StandardResponse(success=False, message=f"发生错误: {str(e)}", data=None)
 
 
-# API Endpoints
 @api.post("/predict/day", response=StandardResponse)
 def create_day_prediction_task(request, data: DayPredictionIn):
     days = 14
@@ -116,7 +116,7 @@ def create_day_prediction_task(request, data: DayPredictionIn):
                 data=None,
             )
 
-        task = DownloadPredictGlobeTask.objects.create(
+        task = DownloadPredictTask.objects.create(
             start_date=start_date,
             end_date=start_date + relativedelta.relativedelta(days=days),
             task_type="DAILY",
@@ -124,7 +124,7 @@ def create_day_prediction_task(request, data: DayPredictionIn):
             status="IN_PROGRESS",
         )
 
-        async_result = predict_and_return_globe.delay(image_paths, [], "DAILY", task.id)
+        async_result = predict_and_return.delay(image_paths, [], "DAILY", task.id)
 
         return StandardResponse(
             success=True,
@@ -139,12 +139,22 @@ def create_day_prediction_task(request, data: DayPredictionIn):
 @api.get("/predict/day/{task_id}", response=StandardResponse)
 def get_day_prediction_result(request, task_id: int):
     try:
-        task = DownloadPredictGlobeTask.objects.get(id=task_id)
+        task = DownloadPredictTask.objects.get(id=task_id)
 
         if task.status == "IN_PROGRESS":
-            return StandardResponse(success=False, message="任务尚未完成", data=None)
+            return StandardResponse(
+                success=False,
+                message="任务正在处理中，请稍后再试",
+                status="IN_PROGRESS",
+                data=None
+            )
         elif task.status == "FAILED":
-            return StandardResponse(success=False, message="任务失败", data=None)
+            return StandardResponse(
+                success=False,
+                message="任务处理失败，请联系管理员",
+                status="FAILED",
+                data=None
+            )
 
         images = []
         start_date = task.start_date
@@ -187,7 +197,7 @@ def create_month_prediction_task(request, data: MonthPredictionIn):
             input_times.append(current_date.month)
             current_date += relativedelta.relativedelta(months=1)
 
-        task = DownloadPredictGlobeTask.objects.create(
+        task = DownloadPredictTask.objects.create(
             start_date=start_date,
             end_date=start_date + relativedelta.relativedelta(months=months),
             task_type="MONTHLY",
@@ -195,7 +205,7 @@ def create_month_prediction_task(request, data: MonthPredictionIn):
             status="IN_PROGRESS",
         )
 
-        async_result = predict_and_return_globe.delay(
+        async_result = predict_and_return.delay(
             image_paths, input_times, "MONTHLY", task.id
         )
 
@@ -212,12 +222,22 @@ def create_month_prediction_task(request, data: MonthPredictionIn):
 @api.get("/predict/month/{task_id}", response=StandardResponse)
 def get_month_prediction_result(request, task_id: int):
     try:
-        task = DownloadPredictGlobeTask.objects.get(id=task_id)
+        task = DownloadPredictTask.objects.get(id=task_id)
 
         if task.status == "IN_PROGRESS":
-            return StandardResponse(success=False, message="任务尚未完成", data=None)
+            return StandardResponse(
+                success=False,
+                message="任务正在处理中，请稍后再试",
+                status="IN_PROGRESS",
+                data=None
+            )
         elif task.status == "FAILED":
-            return StandardResponse(success=False, message="任务失败", data=None)
+            return StandardResponse(
+                success=False,
+                message="任务处理失败，请联系管理员",
+                status="FAILED",
+                data=None
+            )
 
         images = []
         start_date = task.start_date
@@ -351,9 +371,19 @@ def get_dynamics_analysis_result(request, task_id: int):
         task = DynamicGradTask.objects.get(id=task_id)
 
         if task.status == "IN_PROGRESS":
-            return StandardResponse(success=False, message="任务尚未完成", data=None)
+            return StandardResponse(
+                success=False,
+                message="任务正在处理中，请稍后再试",
+                status="IN_PROGRESS",
+                data=None
+            )
         elif task.status == "FAILED":
-            return StandardResponse(success=False, message="任务失败", data=None)
+            return StandardResponse(
+                success=False,
+                message="任务处理失败，请联系管理员",
+                status="FAILED",
+                data=None
+            )
 
         images = []
         start_date = task.start_date
@@ -409,9 +439,19 @@ def get_model_interpreter_result(request, task_id: int):
         task = ModelInterpreterTask.objects.get(id=task_id)
 
         if task.status == "IN_PROGRESS":
-            return StandardResponse(success=False, message="任务尚未完成", data=None)
+            return StandardResponse(
+                success=False,
+                message="任务正在处理中，请稍后再试",
+                status="IN_PROGRESS",
+                data=None
+            )
         elif task.status == "FAILED":
-            return StandardResponse(success=False, message="任务失败", data=None)
+            return StandardResponse(
+                success=False,
+                message="任务处理失败，请联系管理员",
+                status="FAILED",
+                data=None
+            )
 
         images = task.result_urls
 

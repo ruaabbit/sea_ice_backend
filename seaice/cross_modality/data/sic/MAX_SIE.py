@@ -10,8 +10,8 @@ Copyright (c) 2024 by ${git_name_email}, All Rights Reserved.
 """
 
 import numpy as np
-from tqdm import tqdm
 import xarray as xr
+from tqdm import tqdm
 
 paths = np.genfromtxt("nc_sic_path.txt", dtype=str)
 

@@ -5,7 +5,6 @@ import torch.nn.functional as F
 from timm.layers import DropPath
 
 
-
 class PatchEmbed(nn.Module):
     def __init__(
             self, img_size, patch_embed_size, input_dim, embed_dim, norm_layer=None

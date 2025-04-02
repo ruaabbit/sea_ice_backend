@@ -1,6 +1,5 @@
 import datetime
 import io
-import os
 import pickle
 from pathlib import Path
 
@@ -47,14 +46,14 @@ def adjust_end_time(end_time):
 
 
 def grad_nb(
-    start_time: int,
-    end_time: int,
-    grad_month: int,
-    grad_type: str,
-    x1: int,
-    y1: int,
-    x2: int,
-    y2: int,
+        start_time: int,
+        end_time: int,
+        grad_month: int,
+        grad_type: str,
+        x1: int,
+        y1: int,
+        x2: int,
+        y2: int,
 ):
     end_time = adjust_end_time(end_time)
     train_save_dir = "seaice/osi_450_a"
@@ -92,7 +91,7 @@ def grad_nb(
 
     month_position = month_sequence.index(grad_month)
 
-    sic_grad = tester.get_grad(dataloader_test, month_position, grad_type,x1,y1,x2,y2)
+    sic_grad = tester.get_grad(dataloader_test, month_position, grad_type, x1, y1, x2, y2)
 
     sic_grad = np.array(sic_grad)
 

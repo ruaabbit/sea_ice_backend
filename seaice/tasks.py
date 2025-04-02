@@ -192,15 +192,15 @@ def predict_and_return_globe(input_images_paths, input_times, task_type, task_id
 
 @shared_task
 def grad_and_return(
-    start_time: datetime.datetime,
-    end_time: datetime.datetime,
-    grad_month: int,
-    grad_type: str,
-    x1: int,
-    y1: int,
-    x2: int,
-    y2: int,
-    task_id: int,
+        start_time: datetime.datetime,
+        end_time: datetime.datetime,
+        grad_month: int,
+        grad_type: str,
+        x1: int,
+        y1: int,
+        x2: int,
+        y2: int,
+        task_id: int,
 ):
     task = DynamicGradTask.objects.get(id=task_id)
     error = ""
@@ -248,11 +248,11 @@ def grad_and_return(
 
 @shared_task
 def grad_day_and_return(
-    start_time: datetime.datetime,
-    end_time: datetime.datetime,
-    grad_day: int,
-    grad_type: str,
-    task_id: int,
+        start_time: datetime.datetime,
+        end_time: datetime.datetime,
+        grad_day: int,
+        grad_type: str,
+        task_id: int,
 ):
     task = ModelInterpreterTask.objects.get(id=task_id)
     error = ""
