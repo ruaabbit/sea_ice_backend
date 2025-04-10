@@ -314,12 +314,10 @@ def grad_nb(
             # 解析像素位置
             pixel_positions = None
             if position:
-                try:
-                    pixel_positions = [tuple(map(int, pos.split(","))) 
-                                    for pos in position.split(";")]
-                    print(f"分析像素位置: {pixel_positions}")
-                except Exception as e:
-                    print(f"像素位置解析失败: {e}，将使用全图分析")
+                pixel_positions = [tuple(map(int, pos.split(","))) 
+                                for pos in position.split(";")]
+                print(f"分析像素位置: {pixel_positions}")
+
             
             # 打印分析参数
             param_info = []
@@ -327,8 +325,6 @@ def grad_nb(
                 param_info.append(f"预测时间步: {pred_gap}")
             if variable:
                 param_info.append(f"分析变量: {variables[variable-1]}")
-            if param_info:
-                print(" | ".join(param_info))
             
             # 执行梯度计算
             gradients = calculate_daily_gradients(
@@ -342,56 +338,6 @@ def grad_nb(
             )
             print(f"梯度计算完成，形状: {gradients.shape}")
             
-            # 结果保存
-            try:
-                os.makedirs("gradient_analysis/gradients", exist_ok=True)
-                save_path = f"gradient_analysis/gradients/gradients_day{start_time}.npy"
-                np.save(save_path, gradients)
-                print(f"梯度数据已保存至：{save_path}")
-            except Exception as e:
-                print(f"保存梯度数据失败: {e}")
-            
-            # 直接可视化
-                try:
-                    # 创建输出目录
-                    output_dir = os.path.join("gradient_analysis/results", f"day{start_time}")
-                    os.makedirs(output_dir, exist_ok=True)
-                    
-                    # 定义通道名称
-                    channel_names = ["sic", "si_u", "si_v", "t2m", "u10", "v10"]
-                    
-                    # 对梯度数据进行归一化
-                    normalized_gradients = channelwise_normalization(gradients.squeeze(0))
-                    
-                    # 可视化梯度数据
-                    # 对整个序列求平均
-                    sequence_avg = np.mean(normalized_gradients, axis=0)
-                    
-                    # 可视化平均梯度
-                    plot_channel_gradients(
-                        grad_data=sequence_avg,
-                        channel_names=channel_names,
-                        save_dir=output_dir,
-                        filename=f"gradients_day{start_time}_avg"
-                    )
-                    
-                    # 对每个时间步分别可视化
-                    for t in range(normalized_gradients.shape[0]):
-                        # 提取当前时间步的数据
-                        timestep_data = normalized_gradients[t]
-                        
-                        # 可视化当前时间步
-                        plot_channel_gradients(
-                            grad_data=timestep_data,
-                            channel_names=channel_names,
-                            save_dir=output_dir,
-                            filename=f"gradients_day{start_time}_timestep_{t}"
-                        )
-                    
-                    print(f"梯度可视化结果已保存至：{output_dir}")
-                except Exception as e:
-                    print(f"可视化梯度数据失败: {e}")
-            
             return gradients
     except Exception as e:
         print(f"梯度计算过程中出错: {e}")
@@ -400,50 +346,8 @@ def grad_nb(
         return None
 
 
-def create_parser():
-    parser = argparse.ArgumentParser(description="梯度分析工具")
-    parser.add_argument(
-        "-st",
-        "--start_time",
-        type=int,
-        required=True,
-        help="起始时间 (八位数字, YYYYMMDD)",
-    )
-    parser.add_argument(
-        "-et",
-        "--end_time",
-        type=int,
-        required=True,
-        help="结束时间 (八位数字, YYYYMMDD)",
-    )
-    parser.add_argument(
-        "--pred_gap", 
-        type=int, 
-        default=1,
-        help="预测提前期,范围是1-7"
-    )
-    parser.add_argument(
-        "--grad_type", 
-        choices=["sum", "l2"], 
-        default="sum",
-        help="梯度计算方式"
-    )
-    parser.add_argument(
-        "--position", 
-        type=str,
-        help="要分析的像素位置，格式为'x1,y1;x2,y2;x3,y3;x4,y4'"
-    )
-    parser.add_argument(
-        "--variable", 
-        type=int,
-        help="要分析的变量,分别为1-6[SIC,SI_U,SI_V,T2M,U10M,V10M]"
-    )
 
-
-    return parser
-
-
-def batch_process_gradients(start_date, end_date, pred_gap=1, grad_type="sum", position=None, variable=None):
+def batch_process_gradients(start_date, end_date, pred_gap, grad_type="sum", position=None, variable=None):
     """
     批量处理从起始日期到结束日期的每一天的梯度计算
     
@@ -527,8 +431,6 @@ def batch_process_gradients(start_date, end_date, pred_gap=1, grad_type="sum", p
         normalized_gradients = channelwise_normalization(average_gradients.squeeze(0))
         
         # 可视化梯度数据
-        # 对整个序列求平均
-        sequence_avg = np.mean(normalized_gradients, axis=0)
             
         # 对每个时间步分别可视化
         for t in range(normalized_gradients.shape[0]):
@@ -590,14 +492,17 @@ def main(start_time, end_time, pred_gap=1, grad_type="sum", position=None, varia
 
 
 if __name__ == "__main__":
-    parser = create_parser()
-    args = parser.parse_args()
-    
+    start_time = 20231218
+    end_time = 20231231
+    pred_gap = 1
+    grad_type = "sum"
+    position = "100,100;100,200;200,100;200,200"
+    variable = 1
     main(
-        start_time=args.start_time,
-        end_time=args.end_time,
-        pred_gap=args.pred_gap,
-        grad_type=args.grad_type,
-        position=args.position,
-        variable=args.variable
+        start_time=20231218,
+        end_time=20231231,
+        grad_type="sum",
+        pred_gap=1,
+        position=position,
+        variable=variable
     )
