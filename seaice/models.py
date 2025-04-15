@@ -145,8 +145,8 @@ class ModelInterpreterTask(models.Model):
     grad_type = models.CharField(
         max_length=20, choices=[("sum", "海冰面积"), ("l2", "L2范数")], default="sum"
     )
-    position = models.CharField()
-    variable = models.IntegerField()
+    position = models.CharField(max_length=100, blank=True, null=True)
+    variable = models.IntegerField(blank=True, null=True)
     result_urls = models.JSONField(default=list, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

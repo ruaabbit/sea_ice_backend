@@ -35,13 +35,13 @@ def channelwise_normalization(data):
 
 
 def calculate_daily_gradients(
-        model,
-        dataloader,
-        device,
-        pred_gap,
-        grad_type="sum",
-        position=None,
-        variable=None,
+    model,
+    dataloader,
+    device,
+    pred_gap,
+    grad_type="sum",
+    position=None,
+    variable=None,
 ):
     """逐日预测梯度计算，支持区域分析和特定像素位置分析"""
     model.eval()
@@ -57,7 +57,7 @@ def calculate_daily_gradients(
             x_min, x_max = min(x_coords), max(x_coords)
             y_min, y_max = min(y_coords), max(y_coords)
             # 将矩形区域内的所有像素点设置为1
-            pixel_mask[..., x_min: x_max + 1, y_min: y_max + 1] = 1.0
+            pixel_mask[..., x_min : x_max + 1, y_min : y_max + 1] = 1.0
         except Exception as e:
             # print(f"创建像素掩码时出错: {e}")
             # 如果出错，使用全1掩码（不进行区域限制）
@@ -86,6 +86,9 @@ def calculate_daily_gradients(
         # 选择特定的变量
         if variable is not None:
             pred = pred[:, variable - 1, :, :]
+        else:
+            # 当variable为None时，保持pred的原始形状
+            pred = pred.reshape(pred.shape[0], -1, pred.shape[-2], pred.shape[-1])
 
         # 计算梯度
         if grad_type == "sum":
@@ -129,23 +132,27 @@ def plot_channel_gradients(grad_data, channel_names=None):
         data = grad_data[ch_idx]  # 直接取通道数据
 
         # 绘制热力图
-        im = ax.imshow(data, cmap='viridis', origin='lower')
+        im = ax.imshow(data, cmap="viridis", origin="lower")
         plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
 
         # 统计信息
         stats_text = f"""Mean: {data.mean():.2e}
         Max: {data.max():.2e}
         Min: {data.min():.2e}"""
-        ax.text(0.05, 0.95, stats_text,
-                transform=ax.transAxes,
-                verticalalignment='top',
-                bbox=dict(facecolor='white', alpha=0.8))
+        ax.text(
+            0.05,
+            0.95,
+            stats_text,
+            transform=ax.transAxes,
+            verticalalignment="top",
+            bbox=dict(facecolor="white", alpha=0.8),
+        )
 
         ax.set_title(f"{channel_names[ch_idx]}")
-        ax.axis('off')
+        ax.axis("off")
     with io.BytesIO() as buffer:
 
-        plt.savefig(buffer, dpi=150, bbox_inches='tight')
+        plt.savefig(buffer, dpi=150, bbox_inches="tight")
         plt.close()
 
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S_%f")
@@ -160,17 +167,17 @@ def plot_channel_gradients(grad_data, channel_names=None):
 
 
 def grad_nb(
-        start_time: int,
-        end_time: int,
-        pred_gap: int,
-        grad_type: str,
-        position: str = None,
-        variable: int = None,
+    start_time: int,
+    end_time: int,
+    pred_gap: int,
+    grad_type: str,
+    position: str = None,
+    variable: int = None,
 ):
     """计算指定时间范围内的梯度，可选择保存或直接可视化结果"""
 
     Model_Type = "SimVP_7_7"
-    checkpoint_path = f"checkpoints/{Model_Type}.ckpt"
+    checkpoint_path = f"seaice/cross_modality/checkpoints/{Model_Type}.ckpt"
 
     config = Configs()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -196,8 +203,11 @@ def grad_nb(
 
     # 解析像素位置
 
-    pixel_positions = [tuple(map(int, pos.split(",")))
-                       for pos in position.split(";")] if position else None
+    pixel_positions = (
+        [tuple(map(int, pos.split(","))) for pos in position.split(";")]
+        if position
+        else None
+    )
 
     # 执行梯度计算
     gradients = calculate_daily_gradients(
@@ -207,13 +217,15 @@ def grad_nb(
         pred_gap=pred_gap,
         grad_type=grad_type,
         position=pixel_positions,
-        variable=variable
+        variable=variable,
     )
 
     return gradients
 
 
-def batch_process_gradients(start_date, end_date, pred_gap, grad_type="sum", position=None, variable=None):
+def batch_process_gradients(
+    start_date, end_date, pred_gap, grad_type="sum", position=None, variable=None
+):
     """
     批量处理从起始日期到结束日期的每一天的梯度计算
 
@@ -224,8 +236,6 @@ def batch_process_gradients(start_date, end_date, pred_gap, grad_type="sum", pos
         grad_type   : 梯度计算方式，"sum"或"l2"
         position    : 要分析的像素位置，格式为'x1,y1;x2,y2;x3,y3;x4,y4'
         variable    : 要分析的变量，分别为1-6[SIC,SI_U,SI_V,T2M,U10M,V10M]
-        save_result : 是否保存梯度结果
-        visualize   : 是否可视化梯度结果
     """
 
     # 配置参数
@@ -254,52 +264,45 @@ def batch_process_gradients(start_date, end_date, pred_gap, grad_type="sum", pos
         current_end_date = current_end_date_obj.strftime("%Y%m%d")
 
         # 执行梯度计算
-        try:
-            gradients = grad_nb(
-                start_time=int(current_start_date),
-                end_time=int(current_end_date),
-                pred_gap=pred_gap,
-                grad_type=grad_type,
-                position=position,
-                variable=variable
-            )
+        gradients = grad_nb(
+            start_time=int(current_start_date),
+            end_time=int(current_end_date),
+            pred_gap=pred_gap,
+            grad_type=grad_type,
+            position=position,
+            variable=variable,
+        )
 
-            # 如果需要累积结果
-            if accumulated_gradients is None:
-                accumulated_gradients = gradients.copy()
-            else:
-                accumulated_gradients += gradients
+        # 如果需要累积结果
+        if accumulated_gradients is None:
+            accumulated_gradients = gradients.copy()
+        else:
+            accumulated_gradients += gradients
 
-            gradient_count += 1
-
-        except Exception as e:
-            pass
-            # print(f"处理日期 {current_start_date} 时出错: {e}")
-            # 继续处理下一天，而不是中断整个过程
+        gradient_count += 1
 
         # 移动到下一天
         current_date_obj += datetime.timedelta(days=1)
 
-    # 如果有累积的梯度数据，计算平均值并可视化
-    if accumulated_gradients and gradient_count > 0:
-        # 计算平均梯度
-        average_gradients = accumulated_gradients / gradient_count
+    # 计算平均梯度
+    average_gradients = accumulated_gradients / gradient_count
 
-        # 定义通道名称
-        channel_names = ["sic", "si_u", "si_v", "t2m", "u10", "v10"]
+    # 定义通道名称
+    channel_names = ["sic", "si_u", "si_v", "t2m", "u10", "v10"]
 
-        # 对梯度数据进行归一化
-        normalized_gradients = channelwise_normalization(average_gradients.squeeze(0))
+    # 对梯度数据进行归一化
+    normalized_gradients = channelwise_normalization(average_gradients.squeeze(0))
 
-        # 对每个时间步分别可视化
-        for t in range(normalized_gradients.shape[0]):
-            # 提取当前时间步的数据
-            timestep_data = normalized_gradients[t]
+    # 对每个时间步分别可视化
+    for t in range(normalized_gradients.shape[0]):
+        # 提取当前时间步的数据
+        timestep_data = normalized_gradients[t]
 
-            # 可视化当前时间步
-            result_url = plot_channel_gradients(
-                grad_data=timestep_data,
-                channel_names=channel_names
-            )
-            result_urls.append(result_url)
+        # 可视化当前时间步
+        result_url = plot_channel_gradients(
+            grad_data=timestep_data, channel_names=channel_names
+        )
+        result_urls.append(result_url)
+    torch.cuda.empty_cache()
+
     return result_urls
