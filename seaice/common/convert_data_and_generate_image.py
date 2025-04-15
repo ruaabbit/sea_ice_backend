@@ -45,11 +45,11 @@ def prediction_result_to_image(prediction_result: np.ndarray):
     image = Image.fromarray(rgb_image)
 
     with io.BytesIO() as buffer:
-        image.save(buffer, format="PNG", optimize=True)  # 启用PNG优化
+        image.save(buffer, format="WebP", optimize=True)  # 启用PNG优化
 
         # 文件保存部分相
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-        file_name = f"predict_task_{timestamp}_{random.randint(10000, 99999)}.png"
+        file_name = f"predict_task_{timestamp}_{random.randint(10000, 99999)}.webp"
         file_path = Path("predicts") / file_name
 
         if not default_storage.exists(str(file_path)):
@@ -72,31 +72,18 @@ def create_ice_colormap(cmap_style="default", alpha=1.0, n_colors=256):
         matplotlib颜色映射对象
     """
     # 不同的预设颜色方案
-    if cmap_style == "default":
-        # 原始的深蓝到红色渐变
-        ocean_color = "#0077be"  # 深蓝色
-        colors = [ocean_color, "red"]
-
-    elif cmap_style == "blue_white_red":
-        # 蓝-白-红渐变，更好地反映冷热变化
-        colors = ["#0077be", "#ffffff", "#ff0000"]
-
-    elif cmap_style == "rainbow":
-        # 从蓝色到红色的完整光谱
-        colors = ["#0077be", "#00bfff", "#00ffff", "#bfff00", "#ffbf00", "#ff0000"]
-
-    elif cmap_style == "ice":
+    if cmap_style == "ice":
         # 专为海冰设计的渐变，蓝色表示海洋，浅蓝表示新冰，白色表示厚冰
         colors = [
-            "#0077be",  # 深蓝 (海洋)
-            "#00a5db",  # 浅蓝 (低浓度)
-            "#b1e4ff",  # 淡蓝 (中低浓度)
-            "#e1f2fe",  # 非常浅的蓝 (中等浓度)
-            "#ffffff",  # 白色 (高浓度)
+            "#0e2d59",  # 深蓝 (海洋) - 保持不变
+            "#1a5c8c",  # 中深蓝 (优化过渡)
+            "#4a8fc1",  # 中等蓝 (优化过渡)
+            "#a0d0f0",  # 浅蓝白 (优化过渡)
+            "#ffffff",  # 白色 (高浓度) - 保持不变
         ]
     else:
         # 默认使用原始方案
-        ocean_color = "#0077be"
+        ocean_color = "#0e2d59"
         colors = [ocean_color, "red"]
 
     # 创建颜色映射
@@ -114,6 +101,49 @@ def create_ice_colormap(cmap_style="default", alpha=1.0, n_colors=256):
         )
 
     return cmap
+
+
+COASTLINE = cfeature.NaturalEarthFeature(
+    "physical", "coastline", "50m", edgecolor="black", facecolor="never"
+)
+"""Automatically scaled coastline, including major islands."""
+
+
+LAKES = cfeature.NaturalEarthFeature(
+    "physical", "lakes", "50m", edgecolor="none", facecolor=cfeature.COLORS["water"]
+)
+"""Automatically scaled natural and artificial lakes."""
+
+
+LAND = cfeature.NaturalEarthFeature(
+    "physical",
+    "land",
+    "50m",
+    edgecolor="none",
+    facecolor=cfeature.COLORS["land"],
+    zorder=-1,
+)
+"""Automatically scaled land polygons, including major islands."""
+
+
+OCEAN = cfeature.NaturalEarthFeature(
+    "physical",
+    "ocean",
+    "50m",
+    edgecolor="none",
+    facecolor=cfeature.COLORS["water"],
+    zorder=-1,
+)
+"""Automatically scaled ocean polygons."""
+
+
+RIVERS = cfeature.NaturalEarthFeature(
+    "physical",
+    "rivers_lake_centerlines",
+    "50m",
+    edgecolor=cfeature.COLORS["water"],
+    facecolor="never",
+)
 
 
 def prediction_result_to_globe_image(prediction_result: np.ndarray):
@@ -145,8 +175,7 @@ def prediction_result_to_globe_image(prediction_result: np.ndarray):
     # 设置全球视图
     ax.set_global()
 
-    ocean_color = "#0077be"
-    ax.add_feature(cfeature.OCEAN, color=ocean_color, zorder=0)
+    ax.add_feature(cfeature.OCEAN, color="#0e2d59", zorder=0)
 
     # 创建海冰颜色映射
     ice_cmap = create_ice_colormap(cmap_style="ice", n_colors=256)
@@ -157,7 +186,7 @@ def prediction_result_to_globe_image(prediction_result: np.ndarray):
 
     # --- 绘图顺序和方法 ---
     # 1. 绘制海冰和海洋
-    im = ax.pcolormesh(
+    ax.pcolormesh(
         lon,
         lat,
         plot_data,
@@ -170,10 +199,14 @@ def prediction_result_to_globe_image(prediction_result: np.ndarray):
     )
 
     # 2. 绘制陆地
-    ax.add_feature(cfeature.LAND, color="#c0c0c0", zorder=2)  # 灰色陆地
+    ax.add_feature(cfeature.LAND, color="#e1e5cf", zorder=2)  # 灰色陆地
 
     # 3. 绘制海岸线
-    ax.add_feature(cfeature.COASTLINE, linewidth=0.5, zorder=3, color="black")
+    ax.add_feature(cfeature.COASTLINE, linewidth=1, zorder=3, color="black")
+
+    # 4. 绘制湖泊和河流
+    ax.add_feature(cfeature.LAKES, color="#4a8fc1", zorder=4)  # 浅蓝色湖泊
+    ax.add_feature(cfeature.RIVERS, color="#0e2d59", zorder=5)  # 深蓝色河流
 
     # 设置图形边界紧凑
     fig.tight_layout(pad=0)
@@ -182,6 +215,7 @@ def prediction_result_to_globe_image(prediction_result: np.ndarray):
     with io.BytesIO() as buffer:
         plt.savefig(
             buffer,
+            format="webp",
             dpi=300,
             bbox_inches="tight",
             pad_inches=0,
@@ -191,11 +225,12 @@ def prediction_result_to_globe_image(prediction_result: np.ndarray):
         )
         plt.close()
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-        file_name = f"predict_globe_{timestamp}_{random.randint(10000, 99999)}.png"
+        file_name = f"predict_globe_{timestamp}_{random.randint(10000, 99999)}.webp"
         file_path = Path("predicts") / file_name
 
         if not default_storage.exists(str(file_path)):
             file_path = default_storage.save(
-                str(file_path), ContentFile(buffer.getvalue()))
+                str(file_path), ContentFile(buffer.getvalue())
+            )
 
     return default_storage.url(file_path)
