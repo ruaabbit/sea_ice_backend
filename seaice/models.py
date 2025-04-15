@@ -141,10 +141,12 @@ class ModelInterpreterTask(models.Model):
 
     start_date = models.DateField()
     end_date = models.DateField()
-    grad_day = models.IntegerField()
+    pred_gap = models.IntegerField()
     grad_type = models.CharField(
         max_length=20, choices=[("sum", "海冰面积"), ("l2", "L2范数")], default="sum"
     )
+    position = models.CharField()
+    variable = models.IntegerField()
     result_urls = models.JSONField(default=list, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

@@ -13,7 +13,7 @@ from seaice.common.convert_data_and_generate_image import (
     prediction_result_to_globe_image,
 )
 from seaice.common.download_and_organize_data import download_and_organize_data
-from seaice.cross_modality.model_interpreter import grad_nb as grad_nb_day
+from seaice.cross_modality.gradient_analysis import batch_process_gradients as grad_nb_day
 from seaice.models import (
     DownloadPredictTask,
     DynamicGradTask,
@@ -248,24 +248,38 @@ def grad_and_return(
 
 @shared_task
 def grad_day_and_return(
-        start_time: datetime.datetime,
-        end_time: datetime.datetime,
-        grad_day: int,
+        start_date: datetime.datetime,
+        end_date: datetime.datetime,
+        pred_gap: int,
         grad_type: str,
+        position: str,
+        variable: int,
         task_id: int,
 ):
+    """
+    :param    start_date  : 起始日期，格式为YYYYMMDD
+    :param    end_date    : 结束日期，格式为YYYYMMDD
+    :param    pred_gap    : 预测提前期，范围是1-7
+    :param    grad_type   : 梯度计算方式，"sum"或"l2"
+    :param    position    : 要分析的像素位置，格式为'x1,y1;x2,y2;x3,y3;x4,y4'
+    :param    variable    : 要分析的变量，分别为1-6[SIC,SI_U,SI_V,T2M,U10M,V10M]
+
+    :return:
+    """
     task = ModelInterpreterTask.objects.get(id=task_id)
     error = ""
-    task.start_date = start_time
-    task.end_date = end_time
-    task.grad_day = grad_day
+    task.start_date = start_date
+    task.end_date = end_date
+    task.pred_gap = pred_gap
+    task.position = position
+    task.variable = variable
     task.grad_type = grad_type
 
-    start_time = int(start_time.strftime("%Y%m%d"))
-    end_time = int(end_time.strftime("%Y%m%d"))
+    start_date = int(start_date.strftime("%Y%m%d"))
+    end_date = int(end_date.strftime("%Y%m%d"))
 
     try:
-        result_urls = grad_nb_day(start_time, end_time, grad_day, grad_type)
+        result_urls = grad_nb_day(start_date, end_date, pred_gap, grad_type, position, variable)
         task.result_urls = result_urls
         task.status = "COMPLETED"
     except Exception as e:
@@ -278,8 +292,10 @@ def grad_day_and_return(
         {
             "start_time": task.start_date.strftime("%Y%m%d"),
             "end_time": task.end_date.strftime("%Y%m%d"),
-            "grad_day": task.grad_day,
+            "pred_gap": task.pred_gap,
             "grad_type": task.grad_type,
+            "position": task.position,
+            "variable": task.variable,
             "result_urls": task.result_urls,
             "task_id": task.id,
             "status": task.status,
