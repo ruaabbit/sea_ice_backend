@@ -35,13 +35,13 @@ def channelwise_normalization(data):
 
 
 def calculate_daily_gradients(
-    model,
-    dataloader,
-    device,
-    pred_gap,
-    grad_type="sum",
-    position=None,
-    variable=None,
+        model,
+        dataloader,
+        device,
+        pred_gap,
+        grad_type="sum",
+        position=None,
+        variable=None,
 ):
     """逐日预测梯度计算，支持区域分析和特定像素位置分析"""
     model.eval()
@@ -57,7 +57,7 @@ def calculate_daily_gradients(
             x_min, x_max = min(x_coords), max(x_coords)
             y_min, y_max = min(y_coords), max(y_coords)
             # 将矩形区域内的所有像素点设置为1
-            pixel_mask[..., x_min : x_max + 1, y_min : y_max + 1] = 1.0
+            pixel_mask[..., x_min: x_max + 1, y_min: y_max + 1] = 1.0
         except Exception as e:
 
             # print(f"创建像素掩码时出错: {e}")
@@ -76,7 +76,6 @@ def calculate_daily_gradients(
         # 不打印每个批次的形状，减少输出冗余
 
         # # print(pred.shape)
-
 
         # 梯度计算
         if position is not None:
@@ -101,7 +100,6 @@ def calculate_daily_gradients(
         else:  # l2
             f = torch.sum((pred * mask) ** 2)
 
-
         # 反向传播
         f.backward()
 
@@ -116,7 +114,6 @@ def calculate_daily_gradients(
     return np.concatenate(pptvs, axis=0)
 
 
-
 def plot_channel_gradients(grad_data, channel_names=None):
     """
     可视化梯度数据
@@ -127,11 +124,9 @@ def plot_channel_gradients(grad_data, channel_names=None):
         filename      : 保存的文件名
     """
 
-
     if channel_names is None:
         num_channels = grad_data.shape[0]
         channel_names = [f"Channel_{i + 1}" for i in range(num_channels)]
-
 
     # 创建单张大图
     plt.figure(figsize=(6 * grad_data.shape[0], 6))
@@ -176,13 +171,13 @@ def plot_channel_gradients(grad_data, channel_names=None):
 
 
 def grad_nb(
-    start_time: int,
-    end_time: int,
-    pred_gap: int,
-    grad_type: str,
+        start_time: int,
+        end_time: int,
+        pred_gap: int,
+        grad_type: str,
 
-    position: str = None,
-    variable: int = None,
+        position: str = None,
+        variable: int = None,
 ):
     """计算指定时间范围内的梯度，可选择保存或直接可视化结果"""
 
@@ -234,7 +229,7 @@ def grad_nb(
 
 
 def batch_process_gradients(
-    start_date, end_date, pred_gap, grad_type="sum", position=None, variable=None
+        start_date, end_date, pred_gap, grad_type="sum", position=None, variable=None
 ):
     """
     批量处理从起始日期到结束日期的每一天的梯度计算
@@ -253,7 +248,6 @@ def batch_process_gradients(
     input_length = 7
     prediction_length = 7
     days_to_add = input_length + prediction_length - 1
-
 
     # 将日期字符串转换为datetime对象
     start_date_obj = datetime.datetime.strptime(str(start_date), "%Y%m%d")
@@ -274,7 +268,6 @@ def batch_process_gradients(
         current_start_date = current_date_obj.strftime("%Y%m%d")
         current_end_date_obj = current_date_obj + datetime.timedelta(days=days_to_add)
         current_end_date = current_end_date_obj.strftime("%Y%m%d")
-
 
         # 执行梯度计算
         gradients = grad_nb(
