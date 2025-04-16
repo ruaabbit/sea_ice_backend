@@ -122,29 +122,27 @@ def plot_channel_gradients(grad_data, channel_names=None, save_dir="./", filenam
         num_channels = grad_data.shape[0]
         channel_names = [f"Channel_{i + 1}" for i in range(num_channels)]
 
-    # 创建单张大图
-    plt.figure(figsize=(6 * grad_data.shape[0], 6))
+    # 计算所有通道的全局最大最小值
+    vmin = np.min(grad_data)
+    vmax = np.max(grad_data)
 
+    # 创建一行六列的子图
+    fig, axes = plt.subplots(1, grad_data.shape[0], figsize=(3.5 * grad_data.shape[0], 4), squeeze=False)
+    axes = axes[0]
+    ims = []
     for ch_idx in range(grad_data.shape[0]):
-        ax = plt.subplot(1, grad_data.shape[0], ch_idx + 1)
-        data = grad_data[ch_idx]  # 直接取通道数据
-
-        # 绘制热力图
-        im = ax.imshow(data, cmap='viridis', origin='lower')
-        plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
-
-        # 统计信息
-        stats_text = f"""Mean: {data.mean():.2e}
-        Max: {data.max():.2e}
-        Min: {data.min():.2e}"""
-        ax.text(0.05, 0.95, stats_text,
-                transform=ax.transAxes,
-                verticalalignment='top',
-                bbox=dict(facecolor='white', alpha=0.8))
-
+        ax = axes[ch_idx]
+        data = grad_data[ch_idx]
+        im = ax.imshow(data, cmap='viridis', origin='lower', vmin=vmin, vmax=vmax)
+        ims.append(im)
+        stats_text = f"""Mean: {data.mean():.2e}\nMax: {data.max():.2e}\nMin: {data.min():.2e}"""
+        ax.text(0.05, 0.95, stats_text, transform=ax.transAxes, verticalalignment='top', bbox=dict(facecolor='white', alpha=0.8))
         ax.set_title(f"{channel_names[ch_idx]}")
         ax.axis('off')
-
+    plt.tight_layout(pad=1.0, w_pad=0.2, h_pad=0.2)
+    plt.subplots_adjust(left=0.03, right=0.7, top=0.92, bottom=0.08, wspace=0.08)
+    cbar = fig.colorbar(ims[-1], ax=axes, orientation='vertical', fraction=0.025, pad=0.04)
+    cbar.set_label('Gradient Value', fontsize=14)
     plt.savefig(f"{save_dir}/{filename}.png", dpi=150, bbox_inches='tight')
     plt.close()
 
@@ -488,7 +486,7 @@ def main(start_time, end_time, pred_gap=1, grad_type="sum", position=None, varia
 
 
 if __name__ == "__main__":
-    start_time = 20220101
+    start_time = 20231218
     end_time = 20231231
     pred_gap = None
     grad_type = "sum"
