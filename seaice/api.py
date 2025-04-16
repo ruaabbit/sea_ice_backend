@@ -10,12 +10,13 @@ from django.core.files.storage import default_storage
 from ninja import NinjaAPI, Schema, File, UploadedFile
 
 from sea_ice_backend import settings
-from seaice.models import DownloadPredictTask, DynamicGradTask, ModelInterpreterTask, DownloadPredictGlobeTask
-from seaice.tasks import (
-    grad_and_return,
-    grad_day_and_return,
-    predict_and_return
+from seaice.models import (
+    DownloadPredictTask,
+    DynamicGradTask,
+    ModelInterpreterTask,
+    DownloadPredictGlobeTask,
 )
+from seaice.tasks import grad_and_return, grad_day_and_return, predict_and_return
 
 api = NinjaAPI(
     title="Sea Ice API",
@@ -56,8 +57,10 @@ class DynamicsAnalysisIn(Schema):
 class ModelInterpreterIn(Schema):
     start_time: str
     end_time: str
-    grad_day: str
+    pred_gap: int
     grad_type: str
+    position: Optional[str] = None
+    variable: Optional[int] = None
 
 
 class ImagePathDate(Schema):
@@ -146,14 +149,14 @@ def get_day_prediction_result(request, task_id: int):
                 success=False,
                 message="任务正在处理中，请稍后再试",
                 status="IN_PROGRESS",
-                data=None
+                data=None,
             )
         elif task.status == "FAILED":
             return StandardResponse(
                 success=False,
                 message="任务处理失败，请联系管理员",
                 status="FAILED",
-                data=None
+                data=None,
             )
 
         images = []
@@ -229,14 +232,14 @@ def get_month_prediction_result(request, task_id: int):
                 success=False,
                 message="任务正在处理中，请稍后再试",
                 status="IN_PROGRESS",
-                data=None
+                data=None,
             )
         elif task.status == "FAILED":
             return StandardResponse(
                 success=False,
                 message="任务处理失败，请联系管理员",
                 status="FAILED",
-                data=None
+                data=None,
             )
 
         images = []
@@ -375,14 +378,14 @@ def get_dynamics_analysis_result(request, task_id: int):
                 success=False,
                 message="任务正在处理中，请稍后再试",
                 status="IN_PROGRESS",
-                data=None
+                data=None,
             )
         elif task.status == "FAILED":
             return StandardResponse(
                 success=False,
                 message="任务处理失败，请联系管理员",
                 status="FAILED",
-                data=None
+                data=None,
             )
 
         images = []
@@ -415,13 +418,21 @@ def create_model_interpreter(request, data: ModelInterpreterIn):
         task = ModelInterpreterTask.objects.create(
             start_date=start_time,
             end_date=end_time,
-            grad_day=data.grad_day,
+            pred_gap=data.pred_gap,
             grad_type=data.grad_type,
+            position=data.position,
+            variable=data.variable,
             status="IN_PROGRESS",
         )
 
         async_result = grad_day_and_return.delay(
-            start_time, end_time, int(data.grad_day), data.grad_type, task.id
+            start_time,
+            end_time,
+            int(data.pred_gap),
+            data.grad_type,
+            data.position,
+            data.variable,
+            task.id,
         )
 
         return StandardResponse(
@@ -443,14 +454,14 @@ def get_model_interpreter_result(request, task_id: int):
                 success=False,
                 message="任务正在处理中，请稍后再试",
                 status="IN_PROGRESS",
-                data=None
+                data=None,
             )
         elif task.status == "FAILED":
             return StandardResponse(
                 success=False,
                 message="任务处理失败，请联系管理员",
                 status="FAILED",
-                data=None
+                data=None,
             )
 
         images = task.result_urls
