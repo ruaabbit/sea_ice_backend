@@ -45,7 +45,7 @@ def prediction_result_to_image(prediction_result: np.ndarray):
     image = Image.fromarray(rgb_image)
 
     with io.BytesIO() as buffer:
-        image.save(buffer, format="WebP", optimize=True)  # 启用PNG优化
+        image.save(buffer, format="webp", lossless=True)
 
         # 文件保存部分相
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S_%f")
@@ -108,12 +108,10 @@ COASTLINE = cfeature.NaturalEarthFeature(
 )
 """Automatically scaled coastline, including major islands."""
 
-
 LAKES = cfeature.NaturalEarthFeature(
     "physical", "lakes", "50m", edgecolor="none", facecolor=cfeature.COLORS["water"]
 )
 """Automatically scaled natural and artificial lakes."""
-
 
 LAND = cfeature.NaturalEarthFeature(
     "physical",
@@ -125,7 +123,6 @@ LAND = cfeature.NaturalEarthFeature(
 )
 """Automatically scaled land polygons, including major islands."""
 
-
 OCEAN = cfeature.NaturalEarthFeature(
     "physical",
     "ocean",
@@ -135,7 +132,6 @@ OCEAN = cfeature.NaturalEarthFeature(
     zorder=-1,
 )
 """Automatically scaled ocean polygons."""
-
 
 RIVERS = cfeature.NaturalEarthFeature(
     "physical",
@@ -216,6 +212,7 @@ def prediction_result_to_globe_image(prediction_result: np.ndarray):
         plt.savefig(
             buffer,
             format="webp",
+            pil_kwargs={"lossless": True},
             dpi=300,
             bbox_inches="tight",
             pad_inches=0,

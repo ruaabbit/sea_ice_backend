@@ -35,13 +35,13 @@ def channelwise_normalization(data):
 
 
 def calculate_daily_gradients(
-        model,
-        dataloader,
-        device,
-        pred_gap,
-        grad_type="sum",
-        position=None,
-        variable=None,
+    model,
+    dataloader,
+    device,
+    pred_gap,
+    grad_type="sum",
+    position=None,
+    variable=None,
 ):
     """逐日预测梯度计算，支持区域分析和特定像素位置分析"""
     model.eval()
@@ -57,7 +57,7 @@ def calculate_daily_gradients(
             x_min, x_max = min(x_coords), max(x_coords)
             y_min, y_max = min(y_coords), max(y_coords)
             # 将矩形区域内的所有像素点设置为1
-            pixel_mask[..., x_min: x_max + 1, y_min: y_max + 1] = 1.0
+            pixel_mask[..., x_min : x_max + 1, y_min : y_max + 1] = 1.0
         except Exception as e:
 
             # print(f"创建像素掩码时出错: {e}")
@@ -90,13 +90,13 @@ def calculate_daily_gradients(
         if variable is not None:
             pred = pred[:, variable - 1, :, :]
 
-        else:
-            # 当variable为None时，保持pred的原始形状
-            pred = pred.reshape(pred.shape[0], -1, pred.shape[-2], pred.shape[-1])
+        # else:
+        #     # 当variable为None时，保持pred的原始形状
+        #     pred = pred.reshape(pred.shape[0], -1, pred.shape[-2], pred.shape[-1])
 
         # 计算梯度
         if grad_type == "sum":
-            f = torch.sum(torch.abs(pred) * mask)
+            f = torch.sum(torch.abs(pred) * mask * 25)
         else:  # l2
             f = torch.sum((pred * mask) ** 2)
 
@@ -128,21 +128,24 @@ def plot_channel_gradients(grad_data, channel_names=None):
         num_channels = grad_data.shape[0]
         channel_names = [f"Channel_{i + 1}" for i in range(num_channels)]
 
-    # 创建单张大图
-    plt.figure(figsize=(6 * grad_data.shape[0], 6))
+    # 计算所有通道的全局最大最小值
+    vmin = np.min(grad_data)
+    vmax = np.max(grad_data)
 
+    # 创建一行六列的子图
+    fig, axes = plt.subplots(
+        1, grad_data.shape[0], figsize=(3.5 * grad_data.shape[0], 4), squeeze=False
+    )
+    axes = axes[0]
+    ims = []
     for ch_idx in range(grad_data.shape[0]):
-        ax = plt.subplot(1, grad_data.shape[0], ch_idx + 1)
-        data = grad_data[ch_idx]  # 直接取通道数据
-
-        # 绘制热力图
-        im = ax.imshow(data, cmap="viridis", origin="lower")
-        plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
-
-        # 统计信息
-        stats_text = f"""Mean: {data.mean():.2e}
-        Max: {data.max():.2e}
-        Min: {data.min():.2e}"""
+        ax = axes[ch_idx]
+        data = grad_data[ch_idx]
+        im = ax.imshow(data, cmap="viridis", origin="lower", vmin=vmin, vmax=vmax)
+        ims.append(im)
+        stats_text = (
+            f"""Mean: {data.mean():.2e}\nMax: {data.max():.2e}\nMin: {data.min():.2e}"""
+        )
         ax.text(
             0.05,
             0.95,
@@ -151,16 +154,26 @@ def plot_channel_gradients(grad_data, channel_names=None):
             verticalalignment="top",
             bbox=dict(facecolor="white", alpha=0.8),
         )
-
         ax.set_title(f"{channel_names[ch_idx]}")
         ax.axis("off")
+    plt.tight_layout(pad=1.0, w_pad=0.2, h_pad=0.2)
+    plt.subplots_adjust(left=0.03, right=0.75, top=0.92, bottom=0.08, wspace=0.08)
+    cbar = fig.colorbar(
+        ims[-1], ax=axes, orientation="vertical", fraction=0.025, pad=0.04
+    )
+    cbar.set_label("Gradient Value", fontsize=14)
     with io.BytesIO() as buffer:
-
-        plt.savefig(buffer, dpi=150, bbox_inches="tight")
+        plt.savefig(
+            buffer,
+            format="webp",
+            dpi=150,
+            bbox_inches="tight",
+            pil_kwargs={"lossless": True},
+        )
         plt.close()
 
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-        file_name = f"average_gradients_day_{timestamp}.png"
+        file_name = f"average_gradients_day_{timestamp}.webp"
         file_path = Path("grads") / file_name
         if not default_storage.exists(str(file_path)):
             file_path = default_storage.save(
@@ -171,13 +184,12 @@ def plot_channel_gradients(grad_data, channel_names=None):
 
 
 def grad_nb(
-        start_time: int,
-        end_time: int,
-        pred_gap: int,
-        grad_type: str,
-
-        position: str = None,
-        variable: int = None,
+    start_time: int,
+    end_time: int,
+    pred_gap: int,
+    grad_type: str,
+    position: str = None,
+    variable: int = None,
 ):
     """计算指定时间范围内的梯度，可选择保存或直接可视化结果"""
 
@@ -229,7 +241,7 @@ def grad_nb(
 
 
 def batch_process_gradients(
-        start_date, end_date, pred_gap, grad_type="sum", position=None, variable=None
+    start_date, end_date, pred_gap, grad_type="sum", position=None, variable=None
 ):
     """
     批量处理从起始日期到结束日期的每一天的梯度计算
