@@ -10,8 +10,8 @@
  # Copyright (c) 2024 by ${git_name_email}, All Rights Reserved. 
 ### 
 
-DATA_DIR=/data1/Arctic_Ice_Forecasting_Datasets/Sea_Ice_Velocity/sea_ice_y_velocity
-TEXTFILE=/home/ubuntu/Oscar/multimodal-n25/data/siv_v_path.txt
+DATA_DIR=/data/Arctic_Ice_Forecasting_Datasets/Sea_Ice_Velocity/sea_ice_y_velocity
+TEXTFILE=/home/ubuntu/sea_ice_backend/seaice/cross_modality/data/siv_v_path.txt
 
 for year in `ls $DATA_DIR`
 do

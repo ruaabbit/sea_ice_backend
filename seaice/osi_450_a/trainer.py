@@ -44,11 +44,11 @@ class Trainer:
 
             if grad_type == "sum":
                 outputgrad_1 = torch.sum(
-                    abs(input - outputgrad) * arctic_mask * region_mask
+                    abs(outputgrad) * arctic_mask * region_mask
                 )
             else:
                 outputgrad_1 = torch.sqrt(
-                    torch.sum(((input - outputgrad) * arctic_mask * region_mask) ** 2)
+                    torch.sum(((outputgrad) * arctic_mask * region_mask) ** 2)
                 )
 
             outputgrad_1.backward()
