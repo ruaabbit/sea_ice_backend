@@ -81,7 +81,9 @@ def upload_image(request, file: UploadedFile = File(...)):
     try:
         if not file.name.lower().endswith(".png"):
             return StandardResponse(
-                success=False, message="无效的图像格式。仅允许PNG格式", data=None
+                success=False,
+                message="无效的图像格式。仅允许PNG格式 | Invalid image format. Only PNG format is allowed",
+                data=None,
             )
 
         file_content = file.read()
@@ -92,17 +94,25 @@ def upload_image(request, file: UploadedFile = File(...)):
         if default_storage.exists(str(upload_path)):
             image_url = Path(settings.MEDIA_ROOT) / upload_path
             return StandardResponse(
-                success=True, message="图像已存在", data={"image_url": str(image_url)}
+                success=True,
+                message="图像已存在 | Image already exists",
+                data={"image_url": str(image_url)},
             )
 
         saved_path = default_storage.save(str(upload_path), ContentFile(file_content))
         image_url = Path(settings.MEDIA_ROOT) / saved_path
 
         return StandardResponse(
-            success=True, message="图像上传成功", data={"image_url": str(image_url)}
+            success=True,
+            message="图像上传成功 | Image uploaded successfully",
+            data={"image_url": str(image_url)},
         )
     except Exception as e:
-        return StandardResponse(success=False, message=f"发生错误: {str(e)}", data=None)
+        return StandardResponse(
+            success=False,
+            message=f"发生错误: {str(e)} | Error occurred: {str(e)}",
+            data=None,
+        )
 
 
 @api.post("/predict/day", response=StandardResponse)
@@ -115,7 +125,7 @@ def create_day_prediction_task(request, data: DayPredictionIn):
         if len(image_paths) != days:
             return StandardResponse(
                 success=False,
-                message=f"请提供正好{days}个图像路径用于逐日预测",
+                message=f"请提供正好{days}个图像路径用于逐日预测 | Please provide exactly {days} image paths for daily prediction",
                 data=None,
             )
 
@@ -131,12 +141,16 @@ def create_day_prediction_task(request, data: DayPredictionIn):
 
         return StandardResponse(
             success=True,
-            message="逐日预测任务已创建",
+            message="逐日预测任务已创建 | Daily prediction task created successfully",
             data={"task_id": task.id, "celery_id": async_result.id},
         )
 
     except Exception as e:
-        return StandardResponse(success=False, message=f"发生错误: {str(e)}", data=None)
+        return StandardResponse(
+            success=False,
+            message=f"发生错误: {str(e)} | Error occurred: {str(e)}",
+            data=None,
+        )
 
 
 @api.get("/predict/day/{task_id}", response=StandardResponse)
@@ -147,14 +161,14 @@ def get_day_prediction_result(request, task_id: int):
         if task.status == "IN_PROGRESS":
             return StandardResponse(
                 success=False,
-                message="任务正在处理中，请稍后再试",
+                message="任务正在处理中，请稍后再试 | Task is being processed, please try again later",
                 status="IN_PROGRESS",
                 data=None,
             )
         elif task.status == "FAILED":
             return StandardResponse(
                 success=False,
-                message="任务处理失败，请联系管理员",
+                message="任务处理失败，请联系管理员 | Task processing failed, please contact administrator",
                 status="FAILED",
                 data=None,
             )
@@ -171,13 +185,21 @@ def get_day_prediction_result(request, task_id: int):
             )
 
         return StandardResponse(
-            success=True, message="获取逐日预测结果成功", data={"images": images}
+            success=True,
+            message="获取逐日预测结果成功 | Daily prediction results retrieved successfully",
+            data={"images": images},
         )
 
     except DownloadPredictTask.DoesNotExist:
-        return StandardResponse(success=False, message="任务未找到", data=None)
+        return StandardResponse(
+            success=False, message="任务未找到 | Task not found", data=None
+        )
     except Exception as e:
-        return StandardResponse(success=False, message=f"发生错误: {str(e)}", data=None)
+        return StandardResponse(
+            success=False,
+            message=f"发生错误: {str(e)} | Error occurred: {str(e)}",
+            data=None,
+        )
 
 
 @api.post("/predict/month", response=StandardResponse)
@@ -190,7 +212,7 @@ def create_month_prediction_task(request, data: MonthPredictionIn):
         if len(image_paths) != months:
             return StandardResponse(
                 success=False,
-                message=f"请提供正好{months}个图像路径用于逐月预测",
+                message=f"请提供正好{months}个图像路径用于逐月预测 | Please provide exactly {months} image paths for monthly prediction",
                 data=None,
             )
 
@@ -214,12 +236,16 @@ def create_month_prediction_task(request, data: MonthPredictionIn):
 
         return StandardResponse(
             success=True,
-            message="逐月预测任务已创建",
+            message="逐月预测任务已创建 | Monthly prediction task created successfully",
             data={"task_id": task.id, "celery_id": async_result.id},
         )
 
     except Exception as e:
-        return StandardResponse(success=False, message=f"发生错误: {str(e)}", data=None)
+        return StandardResponse(
+            success=False,
+            message=f"发生错误: {str(e)} | Error occurred: {str(e)}",
+            data=None,
+        )
 
 
 @api.get("/predict/month/{task_id}", response=StandardResponse)
@@ -230,14 +256,14 @@ def get_month_prediction_result(request, task_id: int):
         if task.status == "IN_PROGRESS":
             return StandardResponse(
                 success=False,
-                message="任务正在处理中，请稍后再试",
+                message="任务正在处理中，请稍后再试 | Task is being processed, please try again later",
                 status="IN_PROGRESS",
                 data=None,
             )
         elif task.status == "FAILED":
             return StandardResponse(
                 success=False,
-                message="任务处理失败，请联系管理员",
+                message="任务处理失败，请联系管理员 | Task processing failed, please contact administrator",
                 status="FAILED",
                 data=None,
             )
@@ -254,13 +280,21 @@ def get_month_prediction_result(request, task_id: int):
             )
 
         return StandardResponse(
-            success=True, message="获取逐月预测结果成功", data={"images": images}
+            success=True,
+            message="获取逐月预测结果成功 | Monthly prediction results retrieved successfully",
+            data={"images": images},
         )
 
     except DownloadPredictTask.DoesNotExist:
-        return StandardResponse(success=False, message="任务未找到", data=None)
+        return StandardResponse(
+            success=False, message="任务未找到 | Task not found", data=None
+        )
     except Exception as e:
-        return StandardResponse(success=False, message=f"发生错误: {str(e)}", data=None)
+        return StandardResponse(
+            success=False,
+            message=f"发生错误: {str(e)} | Error occurred: {str(e)}",
+            data=None,
+        )
 
 
 @api.get("/realtime/day", response=StandardResponse)
@@ -275,7 +309,9 @@ def realtime_day_prediction(request):
         )
         if not task:
             return StandardResponse(
-                success=False, message="未找到已完成的逐日预测任务", data=None
+                success=False,
+                message="未找到已完成的逐日预测任务 | No completed daily prediction task found",
+                data=None,
             )
 
         images = []
@@ -290,10 +326,16 @@ def realtime_day_prediction(request):
             )
 
         return StandardResponse(
-            success=True, message="获取实时逐日预测成功", data={"images": images}
+            success=True,
+            message="获取实时逐日预测成功 | Real-time daily prediction retrieved successfully",
+            data={"images": images},
         )
     except Exception as e:
-        return StandardResponse(success=False, message=f"发生错误: {str(e)}", data=None)
+        return StandardResponse(
+            success=False,
+            message=f"发生错误: {str(e)} | Error occurred: {str(e)}",
+            data=None,
+        )
 
 
 @api.get("/realtime/month", response=StandardResponse)
@@ -308,7 +350,9 @@ def realtime_month_prediction(request):
         )
         if not task:
             return StandardResponse(
-                success=False, message="未找到已完成的逐月预测任务", data=None
+                success=False,
+                message="未找到已完成的逐月预测任务 | No completed monthly prediction task found",
+                data=None,
             )
 
         images = []
@@ -323,10 +367,16 @@ def realtime_month_prediction(request):
             )
 
         return StandardResponse(
-            success=True, message="获取实时逐月预测成功", data={"images": images}
+            success=True,
+            message="获取实时逐月预测成功 | Real-time monthly prediction retrieved successfully",
+            data={"images": images},
         )
     except Exception as e:
-        return StandardResponse(success=False, message=f"发生错误: {str(e)}", data=None)
+        return StandardResponse(
+            success=False,
+            message=f"发生错误: {str(e)} | Error occurred: {str(e)}",
+            data=None,
+        )
 
 
 @api.post("/dynamics/analysis", response=StandardResponse)
@@ -361,11 +411,15 @@ def create_dynamics_analysis(request, data: DynamicsAnalysisIn):
 
         return StandardResponse(
             success=True,
-            message="动力学分析任务已创建",
+            message="动力学分析任务已创建 | Dynamics analysis task created successfully",
             data={"task_id": task.id, "celery_id": async_result.id},
         )
     except Exception as e:
-        return StandardResponse(success=False, message=f"发生错误: {str(e)}", data=None)
+        return StandardResponse(
+            success=False,
+            message=f"发生错误: {str(e)} | Error occurred: {str(e)}",
+            data=None,
+        )
 
 
 @api.get("/dynamics/analysis/{task_id}", response=StandardResponse)
@@ -376,14 +430,14 @@ def get_dynamics_analysis_result(request, task_id: int):
         if task.status == "IN_PROGRESS":
             return StandardResponse(
                 success=False,
-                message="任务正在处理中，请稍后再试",
+                message="任务正在处理中，请稍后再试 | Task is being processed, please try again later",
                 status="IN_PROGRESS",
                 data=None,
             )
         elif task.status == "FAILED":
             return StandardResponse(
                 success=False,
-                message="任务处理失败，请联系管理员",
+                message="任务处理失败，请联系管理员 | Task processing failed, please contact administrator",
                 status="FAILED",
                 data=None,
             )
@@ -400,13 +454,21 @@ def get_dynamics_analysis_result(request, task_id: int):
             )
 
         return StandardResponse(
-            success=True, message="获取动力学分析结果成功", data={"images": images}
+            success=True,
+            message="获取动力学分析结果成功 | Dynamics analysis results retrieved successfully",
+            data={"images": images},
         )
 
     except DynamicGradTask.DoesNotExist:
-        return StandardResponse(success=False, message="任务未找到", data=None)
+        return StandardResponse(
+            success=False, message="任务未找到 | Task not found", data=None
+        )
     except Exception as e:
-        return StandardResponse(success=False, message=f"发生错误: {str(e)}", data=None)
+        return StandardResponse(
+            success=False,
+            message=f"发生错误: {str(e)} | Error occurred: {str(e)}",
+            data=None,
+        )
 
 
 @api.post("/model/interpreter", response=StandardResponse)
@@ -437,11 +499,15 @@ def create_model_interpreter(request, data: ModelInterpreterIn):
 
         return StandardResponse(
             success=True,
-            message="模型解释任务已创建",
+            message="模型解释任务已创建 | Model interpretation task created successfully",
             data={"task_id": task.id, "celery_id": async_result.id},
         )
     except Exception as e:
-        return StandardResponse(success=False, message=f"发生错误: {str(e)}", data=None)
+        return StandardResponse(
+            success=False,
+            message=f"发生错误: {str(e)} | Error occurred: {str(e)}",
+            data=None,
+        )
 
 
 @api.get("/model/interpreter/{task_id}", response=StandardResponse)
@@ -452,14 +518,14 @@ def get_model_interpreter_result(request, task_id: int):
         if task.status == "IN_PROGRESS":
             return StandardResponse(
                 success=False,
-                message="任务正在处理中，请稍后再试",
+                message="任务正在处理中，请稍后再试 | Task is being processed, please try again later",
                 status="IN_PROGRESS",
                 data=None,
             )
         elif task.status == "FAILED":
             return StandardResponse(
                 success=False,
-                message="任务处理失败，请联系管理员",
+                message="任务处理失败，请联系管理员 | Task processing failed, please contact administrator",
                 status="FAILED",
                 data=None,
             )
@@ -467,10 +533,18 @@ def get_model_interpreter_result(request, task_id: int):
         images = task.result_urls
 
         return StandardResponse(
-            success=True, message="获取模型解释结果成功", data={"images": images}
+            success=True,
+            message="获取模型解释结果成功 | Model interpretation results retrieved successfully",
+            data={"images": images},
         )
 
     except ModelInterpreterTask.DoesNotExist:
-        return StandardResponse(success=False, message="任务未找到", data=None)
+        return StandardResponse(
+            success=False, message="任务未找到 | Task not found", data=None
+        )
     except Exception as e:
-        return StandardResponse(success=False, message=f"发生错误: {str(e)}", data=None)
+        return StandardResponse(
+            success=False,
+            message=f"发生错误: {str(e)} | Error occurred: {str(e)}",
+            data=None,
+        )
